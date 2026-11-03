@@ -1,0 +1,32 @@
+[package]
+name = "cairo"
+version = "1.18.2"
+release = 1
+description = "2D graphics library with support for multiple output devices"
+
+[source]
+url = "https://cairographics.org/releases/cairo-1.18.2.tar.xz"
+sha256 = "a62b9bb42425e844cc3d6ddde043ff39dbabedd1542eba57a2eb79f85889d45a"
+
+[build]
+system = "meson"
+configure_args = [
+  "-Dfontconfig=disabled",
+  "-Dfreetype=disabled",
+  "-Dpng=enabled",
+  "-Dquartz=disabled",
+  "-Dtee=disabled",
+  "-Dxcb=disabled",
+  "-Dxlib=disabled",
+  "-Dxlib-xcb=disabled",
+  "-Dzlib=enabled",
+  "-Dtests=disabled",
+  "-Dglib=disabled",
+  "-Dspectre=disabled",
+  "-Dsymbol-lookup=disabled",
+  "-Dgtk_doc=false"
+]
+
+[dependencies]
+build = ["glibc-runtime", "pixman", "zlib", "libpng"]
+runtime = ["glibc-runtime", "pixman", "zlib", "libpng"]

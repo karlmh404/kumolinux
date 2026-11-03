@@ -1,7 +1,7 @@
 SHELL := /bin/bash
 .DEFAULT_GOAL := all
 
-.PHONY: setup fetch toolchain kernel busybox rootfs image run packages repo base disk run-disk all clean distclean
+.PHONY: setup fetch toolchain kernel busybox rootfs image run packages repo base disk run-disk run-graphics all clean distclean
 setup:
 	./scripts/setup-host.sh
 fetch:
@@ -24,6 +24,7 @@ packages: toolchain
 	./tools/kumo-build package pciutils
 	./tools/kumo-build package usbutils
 	./tools/kumo-build package kumo-hw
+	./tools/kumo-build package weston
 repo: packages
 	./tools/kumo-repo build out/repository/x86_64
 base: repo
@@ -33,6 +34,9 @@ disk: base image kernel
 run-disk:
 	@if [[ ! -f out/images/kumo-root.img ]]; then $(MAKE) disk; fi
 	./scripts/run-disk-qemu.sh
+run-graphics:
+	@if [[ ! -f out/images/kumo-root.img ]]; then $(MAKE) disk; fi
+	./scripts/run-graphics-qemu.sh
 all: image kernel
 clean:
 	./scripts/clean.sh

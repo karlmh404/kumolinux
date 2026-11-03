@@ -1,0 +1,24 @@
+[package]
+name = "seatd"
+version = "0.8.0"
+release = 1
+description = "Minimal seat management daemon and universal libseat library"
+
+[source]
+url = "https://github.com/kennylevinsen/seatd/archive/refs/tags/0.8.0.tar.gz"
+sha256 = "a562a44ee33ccb20954a1c1ec9a90ecb2db7a07ad6b18d0ac904328efbcf65a0"
+
+[build]
+system = "meson"
+configure_args = [
+  "-Dlibseat-logind=systemd",
+  "-Dlibseat-builtin=enabled",
+  "-Dlibseat-seatd=enabled",
+  "-Dserver=enabled",
+  "-Dexamples=disabled",
+  "-Dman-pages=disabled"
+]
+
+[dependencies]
+build = ["glibc-runtime", "systemd"]
+runtime = ["glibc-runtime", "systemd"]

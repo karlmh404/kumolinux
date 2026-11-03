@@ -7,7 +7,8 @@ mkdir -p "$build" "$OUT_DIR/boot" "$OUT_DIR/kernel"
 rm -rf -- "$modules"
 make -C "$src" O="$build" ARCH=x86_64 CROSS_COMPILE="$CROSS_COMPILE" x86_64_defconfig
 "$src/scripts/kconfig/merge_config.sh" -m -O "$build" "$build/.config" \
-  "$CONFIG_DIR/kernel.fragment" "$CONFIG_DIR/kernel-hardware.fragment"
+  "$CONFIG_DIR/kernel.fragment" "$CONFIG_DIR/kernel-hardware.fragment" \
+  "$CONFIG_DIR/kernel-graphics.fragment"
 make -C "$src" O="$build" ARCH=x86_64 CROSS_COMPILE="$CROSS_COMPILE" olddefconfig
 make -C "$src" O="$build" ARCH=x86_64 CROSS_COMPILE="$CROSS_COMPILE" -j"$(jobs)" bzImage modules
 make -C "$src" O="$build" ARCH=x86_64 CROSS_COMPILE="$CROSS_COMPILE" \

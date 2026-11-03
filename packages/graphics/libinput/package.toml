@@ -1,0 +1,23 @@
+[package]
+name = "libinput"
+version = "1.26.2"
+release = 1
+description = "Input device management and event handling library"
+
+[source]
+url = "https://gitlab.freedesktop.org/libinput/libinput/-/archive/1.26.2/libinput-1.26.2.tar.gz"
+sha256 = "5c1c4150f217fea1db2d1fd88e2607b2f1928cfde65c34da65a9f24dcfd69464"
+
+[build]
+system = "meson"
+configure_args = [
+  "-Dlibwacom=false",
+  "-Ddebug-gui=false",
+  "-Dtests=false",
+  "-Ddocumentation=false",
+  "-Dudev-dir=/usr/lib/udev"
+]
+
+[dependencies]
+build = ["glibc-runtime", "libevdev", "mtdev", "systemd"]
+runtime = ["glibc-runtime", "libevdev", "mtdev", "systemd"]

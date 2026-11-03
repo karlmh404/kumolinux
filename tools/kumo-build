@@ -140,6 +140,11 @@ def build_sysroot(catalog: dict, name: str, destination: Path) -> None:
             fail(f"dependency {dep} is not staged")
         shutil.copytree(root, destination, dirs_exist_ok=True, symlinks=True,
                         ignore=copy_filter)
+    host_wayland_pc = ROOT / "work/host-tools/pkgconfig/wayland-scanner.pc"
+    if host_wayland_pc.exists():
+        pc_dir = destination / "usr/share/pkgconfig"
+        pc_dir.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(host_wayland_pc, pc_dir / "wayland-scanner.pc")
 
 def environment(sysroot: Path) -> dict[str, str]:
     bindir = TOOLCHAIN / "bin"
@@ -171,6 +176,7 @@ cpp = '{TARGET}-g++'
 ar = '{TARGET}-ar'
 strip = '{TARGET}-strip'
 pkg-config = 'pkg-config'
+wayland-scanner = '{TOOLCHAIN / "bin" / "wayland-scanner"}'
 [properties]
 sys_root = '{sysroot}'
 pkg_config_libdir = ['{sysroot}/usr/lib/pkgconfig', '{sysroot}/usr/share/pkgconfig']
@@ -277,10 +283,11 @@ def build_one(name: str, catalog: dict) -> None:
     license_dir.mkdir(parents=True, exist_ok=True)
     copied = False
     for pattern in ("COPYING*", "LICENSE*", "LICENCE*", "License*", "*.spdx"):
-        for item in source.glob(pattern):
-            if item.is_file():
-                shutil.copy2(item, license_dir/item.name)
-                copied = True
+        for candidate_dir in (source, recipe_path.parent):
+            for item in candidate_dir.glob(pattern):
+                if item.is_file():
+                    shutil.copy2(item, license_dir/item.name)
+                    copied = True
     if not copied:
         fail(f"{name}: upstream license file was not found")
     stamp.write_text(fingerprint + "\n")

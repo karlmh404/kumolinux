@@ -1,0 +1,6 @@
+--- a/meson.build
++++ b/meson.build
+@@ -52,3 +52,4 @@
+     XKBCONFIGEXTRAPATH = get_option('prefix')/get_option('sysconfdir')/'xkb'
+ endif
++install_subdir('test/data', install_dir: get_option('datadir') / 'X11/xkb', strip_directory: true)

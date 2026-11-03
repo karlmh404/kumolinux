@@ -1,0 +1,67 @@
+[package]
+name = "weston"
+version = "13.0.3"
+release = 1
+description = "Reference Wayland compositor with DRM/KMS and Pixman support"
+
+[source]
+url = "https://gitlab.freedesktop.org/wayland/weston/-/releases/13.0.3/downloads/weston-13.0.3.tar.xz"
+sha256 = "27f68d96e3b97d98daadef13a202356524924fa381418fa6716b9136ef099093"
+
+[build]
+system = "meson"
+configure_args = [
+  "-Dbackend-drm=true",
+  "-Dbackend-default=drm",
+  "-Drenderer-gl=false",
+  "-Dbackend-headless=true",
+  "-Dbackend-wayland=false",
+  "-Dbackend-x11=false",
+  "-Dbackend-rdp=false",
+  "-Dbackend-vnc=false",
+  "-Dbackend-pipewire=false",
+  "-Dremoting=false",
+  "-Dpipewire=false",
+  "-Dbackend-drm-screencast-vaapi=false",
+  "-Dcolor-management-lcms=false",
+  "-Dimage-jpeg=false",
+  "-Dimage-webp=false",
+  "-Dxwayland=false",
+  "-Dsystemd=true",
+  "-Ddemo-clients=false",
+  "-Dsimple-clients=[]",
+  "-Dtools=['terminal','info']",
+  "-Dwcap-decode=false",
+  "-Dtest-junit-xml=false",
+  "-Ddoc=false"
+]
+
+[dependencies]
+build = [
+  "glibc-runtime",
+  "libdrm",
+  "pixman",
+  "wayland",
+  "wayland-protocols",
+  "libxkbcommon",
+  "libevdev",
+  "mtdev",
+  "libinput",
+  "seatd",
+  "cairo",
+  "libpng",
+  "systemd"
+]
+runtime = [
+  "glibc-runtime",
+  "libdrm",
+  "pixman",
+  "wayland",
+  "libxkbcommon",
+  "libevdev",
+  "libinput",
+  "seatd",
+  "cairo",
+  "libpng",
+  "systemd"
+]
