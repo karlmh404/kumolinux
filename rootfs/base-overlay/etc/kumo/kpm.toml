@@ -2,5 +2,8 @@ architecture = "x86_64"
 
 [[repository]]
 name = "base"
-path = "/var/lib/kumo/repos/base"
+url = "https://karlmh404.github.io/kumolinux/kumo/stable/x86_64"
+trust = "ed25519"
+key_id = "sha256:660d7eb6dd3879f38719c07c6e5c445dc44b2747d29245ca45a87ea4e48916a3"
+channel = "stable"
 enabled = true

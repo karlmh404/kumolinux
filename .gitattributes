@@ -1,0 +1,3 @@
+.github/workflows/publish-repository.yml whitespace=cr-at-eol
+docs/repository.md whitespace=cr-at-eol
+rootfs/base-overlay/etc/kumo/kpm.toml whitespace=cr-at-eol

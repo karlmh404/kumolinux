@@ -1,0 +1,370 @@
+#!/usr/bin/env python3
+"""Create and verify Ed25519 signatures for Kumo repository metadata."""
+from __future__ import annotations
+
+import argparse
+import base64
+import datetime as dt
+import hashlib
+import json
+import os
+import re
+import shutil
+import stat
+import subprocess
+import tempfile
+import tomllib
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[1]
+OPENSSL = shutil.which("openssl")
+KEY_ID_PATTERN = re.compile(r"sha256:([0-9a-f]{64})\Z")
+
+
+def fail(message: str) -> None:
+    raise SystemExit(f"[kumo-sign] ERROR: {message}")
+
+
+def run_openssl(*args: str, input_data: bytes | None = None) -> bytes:
+    if not OPENSSL:
+        fail("OpenSSL is required")
+    try:
+        return subprocess.run(
+            [OPENSSL, *args], input=input_data, stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE, check=True,
+        ).stdout
+    except subprocess.CalledProcessError as error:
+        detail = error.stderr.decode("utf-8", "replace").strip()
+        fail(f"OpenSSL operation failed{': ' + detail if detail else ''}")
+
+
+def key_id(public_key: Path) -> str:
+    der = run_openssl("pkey", "-pubin", "-in", str(public_key), "-outform", "DER")
+    prefix = bytes.fromhex("302a300506032b6570032100")
+    if not der.startswith(prefix) or len(der) != len(prefix) + 32:
+        fail(f"{public_key} is not an Ed25519 public key")
+    return "sha256:" + hashlib.sha256(der[len(prefix):]).hexdigest()
+
+
+def file_hash(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as stream:
+        for block in iter(lambda: stream.read(1024 * 1024), b""):
+            digest.update(block)
+    return digest.hexdigest()
+
+
+def parse_key_id(value: str) -> str:
+    match = KEY_ID_PATTERN.fullmatch(value)
+    if not match:
+        fail("key ID must be sha256: followed by 64 lowercase hexadecimal characters")
+    return match.group(1)
+
+
+def utc_expiration(value: str) -> dt.datetime:
+    if not isinstance(value, str):
+        fail("expiration must be a UTC timestamp string")
+    try:
+        result = dt.datetime.strptime(value, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=dt.timezone.utc)
+    except ValueError:
+        fail("expiration must use UTC YYYY-MM-DDTHH:MM:SSZ format")
+    if result.strftime("%Y-%m-%dT%H:%M:%SZ") != value:
+        fail("expiration must use UTC YYYY-MM-DDTHH:MM:SSZ format")
+    now = dt.datetime.now(dt.timezone.utc)
+    if result <= now or result > now + dt.timedelta(days=366):
+        fail("expiration must be in the future and no more than 366 days away")
+    return result
+
+
+def repository_files(directory: Path, channel: str, architecture: str) -> tuple[bytes, bytes]:
+    repo_path = directory / "repo.toml"
+    index_path = directory / "index.toml"
+    try:
+        repo_bytes = repo_path.read_bytes()
+        index_bytes = index_path.read_bytes()
+        repo = tomllib.loads(repo_bytes.decode("utf-8", "strict"))
+        index = tomllib.loads(index_bytes.decode("utf-8", "strict"))
+    except (OSError, UnicodeDecodeError, tomllib.TOMLDecodeError) as error:
+        fail(f"cannot read repository metadata: {error}")
+    declaration = repo.get("repository", {})
+    if not isinstance(declaration, dict):
+        fail("repository metadata declaration is invalid")
+    if type(repo.get("repository_format")) is not int or repo["repository_format"] != 1:
+        fail("unsupported repository metadata format")
+    if declaration.get("channel") != channel or declaration.get("architecture") != architecture:
+        fail("repository metadata channel or architecture does not match the signing request")
+    if (type(index.get("format_version")) is not int or index["format_version"] != 1
+            or index.get("architecture") != architecture):
+        fail("repository index format or architecture does not match")
+    packages = index.get("package", [])
+    if (not isinstance(packages, list) or type(index.get("package_count")) is not int
+            or index["package_count"] != len(packages)):
+        fail("repository index package count is invalid")
+    if type(declaration.get("package_count")) is not int or declaration["package_count"] != len(packages):
+        fail("repository metadata package count does not match the index")
+    seen: set[tuple[str, str, int]] = set()
+    for package in packages:
+        if not isinstance(package, dict):
+            fail("repository index contains an invalid package record")
+        name, version, release = package.get("name"), package.get("version"), package.get("release")
+        filename = package.get("filename")
+        if (not isinstance(name, str) or not name or not isinstance(version, str) or not version
+                or type(release) is not int or release < 1
+                or package.get("architecture") != architecture
+                or not isinstance(filename, str) or Path(filename).name != filename
+                or not filename.endswith(".kpkg")
+                or filename != f"{name}-{version}-{release}-{architecture}.kpkg"):
+            fail("repository index contains an invalid package record")
+        key = (name, version, release)
+        if key in seen:
+            fail(f"duplicate package record: {name} {version}-{release}")
+        seen.add(key)
+        archive = directory / "packages" / filename
+        try:
+            size = archive.stat().st_size
+        except OSError as error:
+            fail(f"cannot stat {filename}: {error}")
+        package_hash = package.get("sha256")
+        if (type(package.get("size")) is not int or size != package["size"]
+                or not isinstance(package_hash, str)
+                or not re.fullmatch(r"[0-9a-f]{64}", package_hash)
+                or file_hash(archive) != package_hash):
+            fail(f"package archive validation failed: {filename}")
+    return repo_bytes, index_bytes
+
+
+def parse_snapshot(data: bytes, *, check_expiration: bool = True) -> dict:
+    try:
+        snapshot = tomllib.loads(data.decode("utf-8", "strict"))
+    except (UnicodeDecodeError, tomllib.TOMLDecodeError) as error:
+        fail(f"invalid snapshot metadata: {error}")
+    if set(snapshot) != {"format_version", "channel", "architecture", "sequence", "expires", "file"}:
+        fail("snapshot metadata has missing or unknown fields")
+    if (type(snapshot.get("format_version")) is not int or snapshot["format_version"] != 1
+            or snapshot.get("channel") not in {"stable", "testing"}):
+        fail("unsupported signed snapshot format or channel")
+    if snapshot.get("architecture") != "x86_64":
+        fail("unsupported signed snapshot architecture")
+    if type(snapshot.get("sequence")) is not int or snapshot["sequence"] < 1:
+        fail("snapshot sequence must be a positive integer")
+    if not isinstance(snapshot.get("file"), list) or len(snapshot["file"]) != 2:
+        fail("snapshot must bind exactly repo.toml and index.toml")
+    by_name = {}
+    for record in snapshot["file"]:
+        if not isinstance(record, dict) or set(record) != {"path", "size", "sha256"}:
+            fail("invalid snapshot file record")
+        path = record["path"]
+        if not isinstance(path, str) or path not in {"repo.toml", "index.toml"} or path in by_name:
+            fail("snapshot contains an unexpected or duplicate metadata path")
+        if type(record["size"]) is not int or record["size"] < 1:
+            fail("snapshot metadata file size is invalid")
+        if not isinstance(record["sha256"], str) or not re.fullmatch(r"[0-9a-f]{64}", record["sha256"]):
+            fail("snapshot metadata file hash is invalid")
+        by_name[path] = record
+    if set(by_name) != {"repo.toml", "index.toml"}:
+        fail("snapshot does not bind both metadata files")
+    if check_expiration:
+        utc_expiration(snapshot["expires"])
+    return snapshot
+
+
+def parse_signature(data: bytes) -> tuple[str, bytes]:
+    try:
+        signature = tomllib.loads(data.decode("utf-8", "strict"))
+    except (UnicodeDecodeError, tomllib.TOMLDecodeError) as error:
+        fail(f"invalid detached signature metadata: {error}")
+    if set(signature) != {"format_version", "algorithm", "key_id", "signature"}:
+        fail("detached signature metadata has missing or unknown fields")
+    if (type(signature.get("format_version")) is not int or signature["format_version"] != 1
+            or signature.get("algorithm") != "Ed25519"):
+        fail("unsupported detached signature format or algorithm")
+    identifier = signature.get("key_id")
+    if not isinstance(identifier, str):
+        fail("detached signature key ID must be a string")
+    parse_key_id(identifier)
+    encoded = signature.get("signature")
+    try:
+        raw = base64.b64decode(encoded, validate=True)
+    except (TypeError, ValueError):
+        fail("detached signature is not valid base64")
+    if len(raw) != 64 or base64.b64encode(raw).decode("ascii") != encoded:
+        fail("detached signature must be a canonical 64-byte Ed25519 signature")
+    return identifier, raw
+
+
+def verify_signature(snapshot_path: Path, signature_path: Path, public_key: Path,
+                     *, check_expiration: bool = True) -> dict:
+    snapshot_bytes = snapshot_path.read_bytes()
+    snapshot = parse_snapshot(snapshot_bytes, check_expiration=check_expiration)
+    identifier, raw = parse_signature(signature_path.read_bytes())
+    if identifier != key_id(public_key):
+        fail("detached signature key ID does not match the supplied public key")
+    with tempfile.TemporaryDirectory(prefix="kumo-sign-") as temporary:
+        temp = Path(temporary)
+        (temp / "snapshot").write_bytes(snapshot_bytes)
+        (temp / "signature").write_bytes(raw)
+        run_openssl("pkeyutl", "-verify", "-rawin", "-pubin", "-inkey", str(public_key),
+                    "-in", str(temp / "snapshot"), "-sigfile", str(temp / "signature"))
+    return snapshot
+
+
+def atomic_write(path: Path, data: bytes, mode: int = 0o644) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd, temporary = tempfile.mkstemp(prefix=f".{path.name}.", dir=path.parent)
+    try:
+        os.fchmod(fd, mode)
+        with os.fdopen(fd, "wb") as stream:
+            stream.write(data)
+            stream.flush()
+            os.fsync(stream.fileno())
+        os.replace(temporary, path)
+    except BaseException:
+        try:
+            os.unlink(temporary)
+        except FileNotFoundError:
+            pass
+        raise
+
+
+def command_keygen(args: argparse.Namespace) -> None:
+    private = args.private_key.expanduser()
+    public = args.public_key.expanduser() if args.public_key else private.with_suffix(".pub")
+    if private.exists() or public.exists():
+        fail("refusing to overwrite an existing signing key")
+    private.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+    private.parent.chmod(0o700)
+    old_umask = os.umask(0o077)
+    try:
+        run_openssl("genpkey", "-algorithm", "ED25519", "-out", str(private))
+        run_openssl("pkey", "-in", str(private), "-pubout", "-out", str(public))
+    finally:
+        os.umask(old_umask)
+    private.chmod(0o600)
+    public.chmod(0o644)
+    print(f"Public key: {public}")
+    print(f"Key ID: {key_id(public)}")
+    der = run_openssl("pkey", "-pubin", "-in", str(public), "-outform", "DER")
+    raw_public = der[len(bytes.fromhex("302a300506032b6570032100")):]
+    fingerprint = base64.b64encode(hashlib.sha256(raw_public).digest()).decode("ascii").rstrip("=")
+    print(f"Fingerprint: SHA256:{fingerprint}")
+
+
+def command_sign(args: argparse.Namespace) -> None:
+    directory = args.repository.resolve()
+    private = args.private_key.expanduser()
+    if not private.is_file() or private.is_symlink():
+        fail("private key must be a regular, non-symlink file")
+    key_stat = private.stat()
+    if stat.S_IMODE(key_stat.st_mode) != 0o600 or key_stat.st_nlink != 1:
+        fail("private key must have mode 0600 and a single hard link")
+    if directory == private.resolve() or directory in private.resolve().parents:
+        fail("private key must be stored outside the repository tree")
+    public = Path(args.public_key).resolve() if args.public_key else None
+    if public is None:
+        with tempfile.TemporaryDirectory(prefix="kumo-sign-") as temporary:
+            public = Path(temporary) / "public.pem"
+            run_openssl("pkey", "-in", str(private), "-pubout", "-out", str(public))
+            sign_with_public(args, directory, private, public)
+    else:
+        sign_with_public(args, directory, private, public)
+
+
+def sign_with_public(args: argparse.Namespace, directory: Path, private: Path, public: Path) -> None:
+    identifier = key_id(public)
+    repo_bytes, index_bytes = repository_files(directory, args.channel, args.architecture)
+    previous = directory / "snapshot.toml"
+    old_sequence = 0
+    if previous.exists():
+        try:
+            old_sequence = parse_snapshot(previous.read_bytes(), check_expiration=False)["sequence"]
+        except OSError as error:
+            fail(f"cannot read prior snapshot: {error}")
+    sequence = args.sequence if args.sequence is not None else old_sequence + 1
+    if sequence <= old_sequence:
+        fail(f"sequence must increase beyond the existing sequence {old_sequence}")
+    expires = args.expires or (dt.datetime.now(dt.timezone.utc) + dt.timedelta(days=90)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    utc_expiration(expires)
+    lines = [
+        "format_version = 1",
+        f"channel = {json.dumps(args.channel)}",
+        f"architecture = {json.dumps(args.architecture)}",
+        f"sequence = {sequence}",
+        f"expires = {json.dumps(expires)}",
+        "",
+    ]
+    for name, contents in (("repo.toml", repo_bytes), ("index.toml", index_bytes)):
+        lines.extend((
+            "[[file]]",
+            f"path = {json.dumps(name)}",
+            f"size = {len(contents)}",
+            f"sha256 = {json.dumps(hashlib.sha256(contents).hexdigest())}",
+            "",
+        ))
+    snapshot_bytes = ("\n".join(lines)).encode("utf-8")
+    with tempfile.TemporaryDirectory(prefix="kumo-sign-") as temporary:
+        temp = Path(temporary)
+        input_path, signature_path = temp / "snapshot.toml", temp / "signature"
+        input_path.write_bytes(snapshot_bytes)
+        run_openssl("pkeyutl", "-sign", "-rawin", "-inkey", str(private),
+                    "-in", str(input_path), "-out", str(signature_path))
+        signature = base64.b64encode(signature_path.read_bytes()).decode("ascii")
+        signature_bytes = (
+            "format_version = 1\n"
+            'algorithm = "Ed25519"\n'
+            f"key_id = {json.dumps(identifier)}\n"
+            f"signature = {json.dumps(signature)}\n"
+        ).encode("utf-8")
+        input_path.write_bytes(snapshot_bytes)
+        sig_input = temp / "signature.toml"
+        sig_input.write_bytes(signature_bytes)
+        verify_signature(input_path, sig_input, public)
+    atomic_write(directory / "snapshot.toml", snapshot_bytes)
+    atomic_write(directory / "snapshot.toml.sig", signature_bytes)
+    print(f"Signed {args.channel}/{args.architecture} repository sequence {sequence}")
+    print(f"Key ID: {identifier}")
+
+
+def command_verify(args: argparse.Namespace) -> None:
+    directory = args.repository.resolve()
+    snapshot = verify_signature(directory / "snapshot.toml", directory / "snapshot.toml.sig",
+                                args.public_key.resolve())
+    if snapshot["channel"] != args.channel or snapshot["architecture"] != args.architecture:
+        fail("signed snapshot channel or architecture does not match the verification request")
+    records = {record["path"]: record for record in snapshot["file"]}
+    for name in ("repo.toml", "index.toml"):
+        data = (directory / name).read_bytes()
+        if len(data) != records[name]["size"] or hashlib.sha256(data).hexdigest() != records[name]["sha256"]:
+            fail(f"signed metadata validation failed: {name}")
+    repository_files(directory, args.channel, args.architecture)
+    print(f"Verified {args.channel}/{args.architecture} repository sequence {snapshot['sequence']}")
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description=__doc__)
+    subparsers = parser.add_subparsers(dest="command", required=True)
+    keygen = subparsers.add_parser("keygen", help="create an offline Ed25519 signing key")
+    keygen.add_argument("--private-key", type=Path,
+                        default=Path("~/.config/kumo/signing/kumo-release.key"))
+    keygen.add_argument("--public-key", type=Path)
+    keygen.set_defaults(function=command_keygen)
+    sign = subparsers.add_parser("sign", help="sign repository metadata")
+    sign.add_argument("--repository", type=Path, required=True)
+    sign.add_argument("--private-key", type=Path, required=True)
+    sign.add_argument("--public-key", type=Path)
+    sign.add_argument("--channel", choices=("stable", "testing"), default="stable")
+    sign.add_argument("--architecture", choices=("x86_64",), default="x86_64")
+    sign.add_argument("--sequence", type=int)
+    sign.add_argument("--expires")
+    sign.set_defaults(function=command_sign)
+    verify = subparsers.add_parser("verify", help="independently verify signed repository metadata")
+    verify.add_argument("--repository", type=Path, required=True)
+    verify.add_argument("--public-key", type=Path, required=True)
+    verify.add_argument("--channel", choices=("stable", "testing"), default="stable")
+    verify.add_argument("--architecture", choices=("x86_64",), default="x86_64")
+    verify.set_defaults(function=command_verify)
+    args = parser.parse_args()
+    args.function(args)
+
+
+if __name__ == "__main__":
+    main()

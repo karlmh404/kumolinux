@@ -1,6 +1,6 @@
 [package]
 name = "kpm"
-version = "0.2.0"
+version = "0.3.0"
 release = 1
 description = "Kumo Package Manager"
 [source]
@@ -10,5 +10,5 @@ url = "local"
 system = "custom"
 script = "build.sh"
 [dependencies]
-build = ["glibc-runtime", "curl"]
-runtime = ["glibc-runtime", "curl"]
+build = ["glibc-runtime", "curl", "openssl"]
+runtime = ["glibc-runtime", "curl", "openssl"]

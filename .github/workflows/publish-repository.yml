@@ -43,10 +43,22 @@ jobs:
             --repo "$GITHUB_REPOSITORY" \
             --pattern '*.kpkg' \
             --dir out/packages
+          mkdir -p out/signed-metadata
+          gh release download "$RELEASE_TAG" \
+            --repo "$GITHUB_REPOSITORY" \
+            --pattern 'snapshot.toml' \
+            --pattern 'snapshot.toml.sig' \
+            --dir out/signed-metadata
       - name: Build static stable repository
         run: |
           test -n "$(find out/packages -maxdepth 1 -type f -name '*.kpkg' -print -quit)"
           ./tools/kumo-repo build --channel stable --arch x86_64 out/public-repo
+          repository=out/public-repo/stable/x86_64
+          cp out/signed-metadata/snapshot.toml "$repository/"
+          cp out/signed-metadata/snapshot.toml.sig "$repository/"
+          public_key="$(find rootfs/base-overlay/usr/share/kumo/keys -maxdepth 1 -type f -name '*.pub' -print -quit)"
+          test -n "$public_key"
+          ./tools/kumo-sign verify --repository "$repository" --public-key "$public_key"
           mkdir -p _site/kumo
           cp -a out/public-repo/stable _site/kumo/
       - uses: actions/upload-pages-artifact@v3

@@ -14,11 +14,13 @@
 #include <iterator>
 #include <limits>
 #include <map>
+#include <memory>
 #include <set>
 #include <sstream>
 #include <stdexcept>
 #include <string>
 #include <tuple>
+#include <ctime>
 #include <sys/file.h>
 #include <sys/stat.h>
 #include <sys/types.h>
@@ -27,18 +29,21 @@
 #include <unistd.h>
 #include <vector>
 #include <curl/curl.h>
+#include <openssl/evp.h>
+#include <openssl/pem.h>
 
 namespace fs = std::filesystem;
 
 namespace {
 
-constexpr const char *kVersion = "0.2.0";
+constexpr const char *kVersion = "0.3.0";
 constexpr int kFormatVersion = 1;
 const std::string kArchitecture = "x86_64";
 
 struct TomlDoc {
     std::map<std::string, std::string> values;
     std::vector<std::map<std::string, std::string>> records;
+    std::vector<std::string> tables;
 };
 
 struct Package {
@@ -72,6 +77,9 @@ struct Repository {
     std::string name;
     std::string configured_path;
     std::string url;
+    std::string trust = "local";
+    std::string key_id;
+    std::string channel = "stable";
     fs::path path;
     bool remote = false;
     bool enabled = true;
@@ -157,13 +165,15 @@ TomlDoc parse_toml(const std::string &text) {
         ++line_number;
         line = trim(line);
         if (line.empty() || line[0] == '#') continue;
-        if (line == "[[package]]" || line == "[[repository]]") {
+        if (line == "[[package]]" || line == "[[repository]]" || line == "[[file]]") {
+            doc.tables.push_back(line);
             section = line.substr(2, line.size() - 4);
             doc.records.emplace_back();
             record = &doc.records.back();
             continue;
         }
         if (line.front() == '[' && line.back() == ']') {
+            doc.tables.push_back(line);
             section = line.substr(1, line.size() - 2);
             record = nullptr;
             continue;
@@ -179,8 +189,9 @@ TomlDoc parse_toml(const std::string &text) {
         const std::string key = trim(line.substr(0, equals));
         const std::string value = trim(line.substr(equals + 1));
         const std::string full_key = section.empty() ? key : section + "." + key;
-        if (record) (*record)[key] = value;
-        else doc.values[full_key] = value;
+        auto &values = record ? *record : doc.values;
+        if (!values.emplace(record ? key : full_key, value).second)
+            throw std::runtime_error("duplicate TOML key at line " + std::to_string(line_number));
     }
     return doc;
 }
@@ -200,6 +211,10 @@ std::string toml_string(const TomlDoc &doc, const std::string &key,
 }
 
 std::uint64_t parse_integer(const std::string &value, const std::string &field) {
+    if (value.empty() || !std::all_of(value.begin(), value.end(), [](unsigned char ch) {
+            return ch >= '0' && ch <= '9';
+        }))
+        throw std::runtime_error("invalid integer for " + field);
     std::size_t parsed = 0;
     const auto result = std::stoull(value, &parsed);
     if (parsed != value.size()) throw std::runtime_error("invalid integer for " + field);
@@ -356,7 +371,7 @@ void download_https(const std::string &url, const fs::path &destination,
     set_option(CURLOPT_FAILONERROR, 1L);
     set_option(CURLOPT_SSL_VERIFYPEER, 1L);
     set_option(CURLOPT_SSL_VERIFYHOST, 2L);
-    set_option(CURLOPT_USERAGENT, "kpm/0.2.0");
+    set_option(CURLOPT_USERAGENT, "kpm/0.3.0");
     set_option(CURLOPT_ERRORBUFFER, error_buffer);
     set_option(CURLOPT_WRITEFUNCTION, curl_write);
     set_option(CURLOPT_WRITEDATA, &context);
@@ -673,6 +688,8 @@ bool valid_repo_name(const std::string &name) {
     });
 }
 
+bool valid_key_id(const std::string &key_id);
+
 std::vector<Repository> load_repositories() {
     std::vector<Repository> repositories;
     if (!fs::exists(g_config)) return repositories;
@@ -694,8 +711,17 @@ std::vector<Repository> load_repositories() {
         if (has_url) {
             repository.remote = true;
             repository.url = normalize_https_url(unquote(record.at("url")));
+            repository.trust = record.count("trust") ? unquote(record.at("trust")) : "";
+            repository.key_id = record.count("key_id") ? unquote(record.at("key_id")) : "";
+            repository.channel = record.count("channel") ? unquote(record.at("channel")) : "";
+            if (repository.trust != "ed25519" || !valid_key_id(repository.key_id)
+                || (repository.channel != "stable" && repository.channel != "testing"))
+                throw std::runtime_error(repository.name
+                    + ": HTTPS repositories require trust = \"ed25519\", an authorized key_id, and channel");
             repository.path = g_cache / "repositories" / repository.name / "current";
         } else {
+            if (record.count("trust") && unquote(record.at("trust")) != "local")
+                throw std::runtime_error(repository.name + ": filesystem repositories must use local trust");
             repository.configured_path = unquote(record.at("path"));
             const fs::path configured(repository.configured_path);
             if (!configured.is_absolute())
@@ -771,8 +797,8 @@ std::uint64_t validate_repository_metadata(const std::string &text, const Reposi
     if (toml_integer(doc, "repository_format") != 1)
         throw std::runtime_error("unsupported repository format: " + repository.name);
     const std::string channel = toml_string(doc, "repository.channel");
-    if (channel != "stable" && channel != "testing")
-        throw std::runtime_error("unsupported repository channel: " + channel);
+    if (channel != repository.channel)
+        throw std::runtime_error("repository channel mismatch: " + repository.name);
     if (toml_string(doc, "repository.architecture") != kArchitecture)
         throw std::runtime_error("repository architecture mismatch: " + repository.name);
     if (toml_string(doc, "repository.name").empty())
@@ -780,11 +806,331 @@ std::uint64_t validate_repository_metadata(const std::string &text, const Reposi
     return toml_integer(doc, "repository.package_count");
 }
 
+bool valid_key_id(const std::string &key_id) {
+    return key_id.size() == 71 && key_id.compare(0, 7, "sha256:") == 0
+        && std::all_of(key_id.begin() + 7, key_id.end(), [](unsigned char ch) {
+            return (ch >= '0' && ch <= '9') || (ch >= 'a' && ch <= 'f');
+        });
+}
+
+bool valid_sha256(const std::string &hash) {
+    return hash.size() == 64 && std::all_of(hash.begin(), hash.end(), [](unsigned char ch) {
+        return (ch >= '0' && ch <= '9') || (ch >= 'a' && ch <= 'f');
+    });
+}
+
+std::string sha256_bytes(const std::string &data) {
+    unsigned char digest[EVP_MAX_MD_SIZE];
+    unsigned int length = 0;
+    if (EVP_Digest(data.data(), data.size(), digest, &length, EVP_sha256(), nullptr) != 1
+        || length != 32)
+        throw std::runtime_error("cannot calculate SHA-256 digest");
+    std::ostringstream result;
+    result << std::hex << std::setfill('0');
+    for (unsigned int i = 0; i < length; ++i) result << std::setw(2) << static_cast<unsigned>(digest[i]);
+    return result.str();
+}
+
+std::time_t parse_utc_time(const std::string &text, const std::string &field) {
+    std::tm parsed{};
+    char *end = strptime(text.c_str(), "%Y-%m-%dT%H:%M:%SZ", &parsed);
+    if (!end || *end != '\0')
+        throw std::runtime_error("invalid UTC timestamp in " + field);
+    const std::time_t timestamp = timegm(&parsed);
+    std::tm normalized{};
+    char formatted[32];
+    if (!gmtime_r(&timestamp, &normalized)
+        || std::strftime(formatted, sizeof(formatted), "%Y-%m-%dT%H:%M:%SZ", &normalized) == 0
+        || text != formatted)
+        throw std::runtime_error("invalid UTC timestamp in " + field);
+    return timestamp;
+}
+
+struct SignedSnapshot {
+    std::uint64_t sequence = 0;
+    std::string channel;
+    std::time_t expires = 0;
+    std::map<std::string, std::pair<std::uint64_t, std::string>> files;
+};
+
+SignedSnapshot parse_signed_snapshot(const std::string &text, const Repository &repository) {
+    const TomlDoc doc = parse_toml(text);
+    if (doc.values.size() != 5 || doc.records.size() != 2
+        || doc.tables != std::vector<std::string>{"[[file]]", "[[file]]"}
+        || !doc.values.count("format_version") || !doc.values.count("channel")
+        || !doc.values.count("architecture") || !doc.values.count("sequence")
+        || !doc.values.count("expires") || toml_integer(doc, "format_version") != 1)
+        throw std::runtime_error("invalid or unsupported signed repository snapshot");
+    SignedSnapshot snapshot;
+    snapshot.sequence = toml_integer(doc, "sequence");
+    snapshot.channel = toml_string(doc, "channel");
+    if (snapshot.sequence == 0 || snapshot.channel != repository.channel
+        || toml_string(doc, "architecture") != kArchitecture)
+        throw std::runtime_error("signed repository snapshot channel or architecture mismatch");
+    snapshot.expires = parse_utc_time(toml_string(doc, "expires"), "snapshot.expires");
+    const std::time_t now = std::time(nullptr);
+    if (now < 1577836800)
+        throw std::runtime_error("system clock is unset; cannot verify repository expiration");
+    if (snapshot.expires <= now)
+        throw std::runtime_error("signed repository snapshot has expired");
+    if (snapshot.expires > now + 366 * 24 * 60 * 60)
+        throw std::runtime_error("signed repository snapshot expiration exceeds 366 days");
+
+    for (const auto &record : doc.records) {
+        if (record.size() != 3 || !record.count("path") || !record.count("size")
+            || !record.count("sha256"))
+            throw std::runtime_error("invalid signed repository snapshot file record");
+        const std::string path = unquote(record.at("path"));
+        const std::string hash = unquote(record.at("sha256"));
+        const std::uint64_t size = parse_integer(record.at("size"), "snapshot file size");
+        if ((path != "repo.toml" && path != "index.toml") || size == 0
+            || size > 4 * 1024 * 1024 || !valid_sha256(hash)
+            || !snapshot.files.emplace(path, std::make_pair(size, hash)).second)
+            throw std::runtime_error("invalid or duplicate signed repository metadata path");
+    }
+    if (snapshot.files.size() != 2 || !snapshot.files.count("repo.toml")
+        || !snapshot.files.count("index.toml"))
+        throw std::runtime_error("signed snapshot must bind repo.toml and index.toml");
+    return snapshot;
+}
+
+fs::path trusted_key_path(const std::string &key_id) {
+    if (!valid_key_id(key_id)) throw std::runtime_error("invalid repository signing key ID");
+    return target_path("/usr/share/kumo/keys/" + key_id.substr(7) + ".pub");
+}
+
+void verify_detached_signature(const std::string &snapshot_text, const std::string &signature_text,
+                               const Repository &repository) {
+    const TomlDoc signature_doc = parse_toml(signature_text);
+    if (signature_doc.values.size() != 4 || !signature_doc.records.empty()
+        || !signature_doc.tables.empty()
+        || !signature_doc.values.count("format_version") || !signature_doc.values.count("algorithm")
+        || !signature_doc.values.count("key_id") || !signature_doc.values.count("signature")
+        || toml_integer(signature_doc, "format_version") != 1
+        || toml_string(signature_doc, "algorithm") != "Ed25519")
+        throw std::runtime_error("invalid or unsupported detached repository signature");
+    const std::string signature_key_id = toml_string(signature_doc, "key_id");
+    if (!valid_key_id(signature_key_id) || signature_key_id != repository.key_id)
+        throw std::runtime_error("repository signature key is not authorized by KPM configuration");
+
+    std::string encoded = toml_string(signature_doc, "signature");
+    if (encoded.size() != 88 || encoded.substr(86) != "==")
+        throw std::runtime_error("invalid Ed25519 signature encoding");
+    unsigned char decoded[66];
+    const int decoded_length = EVP_DecodeBlock(decoded,
+        reinterpret_cast<const unsigned char *>(encoded.data()), static_cast<int>(encoded.size()));
+    if (decoded_length != 66) throw std::runtime_error("invalid base64 repository signature");
+    unsigned char canonical[89];
+    const int canonical_length = EVP_EncodeBlock(canonical, decoded, 64);
+    if (canonical_length != 88 || encoded != reinterpret_cast<const char *>(canonical))
+        throw std::runtime_error("non-canonical base64 repository signature");
+
+    const fs::path key_path = trusted_key_path(repository.key_id);
+    BIO *bio = BIO_new_file(key_path.c_str(), "rb");
+    if (!bio) throw std::runtime_error("cannot open authorized repository key: " + key_path.string());
+    EVP_PKEY *raw_key = PEM_read_bio_PUBKEY(bio, nullptr, nullptr, nullptr);
+    BIO_free(bio);
+    if (!raw_key) throw std::runtime_error("cannot parse authorized repository public key");
+    std::unique_ptr<EVP_PKEY, decltype(&EVP_PKEY_free)> key(raw_key, EVP_PKEY_free);
+    if (EVP_PKEY_base_id(key.get()) != EVP_PKEY_ED25519)
+        throw std::runtime_error("authorized repository key is not Ed25519");
+    unsigned char raw_public[32];
+    std::size_t public_length = sizeof(raw_public);
+    if (EVP_PKEY_get_raw_public_key(key.get(), raw_public, &public_length) != 1
+        || public_length != sizeof(raw_public)
+        || "sha256:" + sha256_bytes(std::string(reinterpret_cast<char *>(raw_public), public_length))
+            != repository.key_id)
+        throw std::runtime_error("authorized repository key ID does not match its public key");
+
+    EVP_MD_CTX *raw_context = EVP_MD_CTX_new();
+    if (!raw_context) throw std::runtime_error("cannot allocate signature verification context");
+    std::unique_ptr<EVP_MD_CTX, decltype(&EVP_MD_CTX_free)> context(raw_context, EVP_MD_CTX_free);
+    if (EVP_DigestVerifyInit(context.get(), nullptr, nullptr, nullptr, key.get()) != 1
+        || EVP_DigestVerify(context.get(), decoded, 64,
+                            reinterpret_cast<const unsigned char *>(snapshot_text.data()),
+                            snapshot_text.size()) != 1)
+        throw std::runtime_error("repository snapshot Ed25519 signature verification failed");
+}
+
+SignedSnapshot verify_signed_snapshot(const Repository &repository, const fs::path &directory) {
+    const std::string snapshot_text = read_text(directory / "snapshot.toml");
+    const std::string signature_text = read_text(directory / "snapshot.toml.sig");
+    const SignedSnapshot snapshot = parse_signed_snapshot(snapshot_text, repository);
+    verify_detached_signature(snapshot_text, signature_text, repository);
+    return snapshot;
+}
+
+void verify_snapshot_files(const SignedSnapshot &snapshot, const fs::path &directory) {
+    for (const auto &file : snapshot.files) {
+        const std::string contents = read_text(directory / file.first);
+        if (contents.size() != file.second.first || sha256_bytes(contents) != file.second.second)
+            throw std::runtime_error("signed repository metadata hash or size mismatch: " + file.first);
+    }
+}
+
+std::uint64_t cached_sequence(const fs::path &current, std::string *snapshot_text = nullptr) {
+    const fs::path path = current / "snapshot.toml";
+    const std::string contents = read_text(path);
+    const TomlDoc doc = parse_toml(contents);
+    if (toml_integer(doc, "format_version") != 1 || toml_integer(doc, "sequence") == 0)
+        throw std::runtime_error("cached signed repository snapshot is invalid");
+    if (snapshot_text) *snapshot_text = contents;
+    return toml_integer(doc, "sequence");
+}
+
+void require_root_owned_directory(const fs::path &path) {
+    struct stat status{};
+    if (lstat(path.c_str(), &status) != 0 || !S_ISDIR(status.st_mode)
+        || status.st_uid != 0 || (status.st_mode & (S_IWGRP | S_IWOTH)) != 0)
+        throw std::runtime_error("signed repository cache must be a protected root-owned directory: "
+                                 + path.string());
+}
+
+void require_root_owned_chain(const std::vector<fs::path> &paths) {
+    for (const auto &path : paths) require_root_owned_directory(path);
+}
+
+void sync_path(const fs::path &path, const int extra_flags = 0) {
+    const int descriptor = open(path.c_str(), O_RDONLY | O_CLOEXEC | extra_flags);
+    if (descriptor < 0)
+        throw std::runtime_error("cannot open for durable repository state: " + path.string()
+                                 + ": " + std::strerror(errno));
+    if (fsync(descriptor) != 0) {
+        const int error = errno;
+        close(descriptor);
+        throw std::runtime_error("cannot sync repository state: " + path.string()
+                                 + ": " + std::strerror(error));
+    }
+    if (close(descriptor) != 0)
+        throw std::runtime_error("cannot close repository state: " + path.string()
+                                 + ": " + std::strerror(errno));
+}
+
+struct TrustedState {
+    std::uint64_t sequence = 0;
+    std::string snapshot_hash;
+};
+
+fs::path trusted_state_directory() {
+    return target_path("/var/lib/kumo/kpm/trust");
+}
+
+fs::path trusted_state_path(const Repository &repository) {
+    return trusted_state_directory() / (repository.name + ".toml");
+}
+
+void write_atomic(const fs::path &path, const std::string &content);
+
+TrustedState load_trusted_state(const Repository &repository) {
+    const fs::path directory = trusted_state_directory();
+    struct stat directory_status{};
+    if (lstat(directory.c_str(), &directory_status) != 0) {
+        if (errno == ENOENT) return {};
+        throw std::runtime_error("cannot inspect KPM trust state directory");
+    }
+    require_root_owned_chain({
+        target_path("/var/lib"), target_path("/var/lib/kumo"),
+        target_path("/var/lib/kumo/kpm"), directory,
+    });
+    const fs::path path = trusted_state_path(repository);
+    struct stat file_status{};
+    if (lstat(path.c_str(), &file_status) != 0) {
+        if (errno == ENOENT) return {};
+        throw std::runtime_error("cannot inspect repository trust state: " + repository.name);
+    }
+    if (!S_ISREG(file_status.st_mode) || file_status.st_uid != 0
+        || (file_status.st_mode & (S_IWGRP | S_IWOTH)) != 0)
+        throw std::runtime_error("repository trust state is not protected root-owned data: "
+                                 + repository.name);
+    const TomlDoc doc = parse_toml(read_text(path));
+    if (doc.values.size() != 3 || !doc.records.empty() || !doc.tables.empty()
+        || !doc.values.count("format_version") || !doc.values.count("sequence")
+        || !doc.values.count("snapshot_sha256") || toml_integer(doc, "format_version") != 1)
+        throw std::runtime_error("repository trust state is invalid: " + repository.name);
+    TrustedState state;
+    state.sequence = toml_integer(doc, "sequence");
+    state.snapshot_hash = toml_string(doc, "snapshot_sha256");
+    if (state.sequence == 0 || !valid_sha256(state.snapshot_hash))
+        throw std::runtime_error("repository trust state is invalid: " + repository.name);
+    return state;
+}
+
+void save_trusted_state(const Repository &repository, const std::uint64_t sequence,
+                        const std::string &snapshot_hash) {
+    const fs::path directory = trusted_state_directory();
+    fs::create_directories(directory);
+    require_root_owned_chain({
+        target_path("/var/lib"), target_path("/var/lib/kumo"),
+        target_path("/var/lib/kumo/kpm"), directory,
+    });
+    fs::permissions(directory, fs::perms::owner_all | fs::perms::group_read
+        | fs::perms::group_exec | fs::perms::others_read | fs::perms::others_exec,
+        fs::perm_options::replace);
+    require_root_owned_directory(directory);
+    const std::string contents = "format_version = 1\n"
+        "sequence = " + std::to_string(sequence) + "\n"
+        "snapshot_sha256 = " + toml_quote(snapshot_hash) + "\n";
+    write_atomic(trusted_state_path(repository), contents);
+    fs::permissions(trusted_state_path(repository), fs::perms::owner_read | fs::perms::owner_write
+        | fs::perms::group_read | fs::perms::others_read, fs::perm_options::replace);
+    const fs::path path = trusted_state_path(repository);
+    struct stat status{};
+    if (lstat(path.c_str(), &status) != 0 || !S_ISREG(status.st_mode) || status.st_uid != 0
+        || (status.st_mode & (S_IWGRP | S_IWOTH)) != 0)
+        throw std::runtime_error("cannot protect repository trust state: " + repository.name);
+    sync_path(path);
+    sync_path(directory, O_DIRECTORY);
+    sync_path(directory.parent_path(), O_DIRECTORY);
+    sync_path(directory.parent_path().parent_path(), O_DIRECTORY);
+    sync_path(directory.parent_path().parent_path().parent_path(), O_DIRECTORY);
+}
+
+void verify_repository_cache(const Repository &repository);
+
+std::uint64_t highest_trusted_sequence(const Repository &repository) {
+    const TrustedState state = load_trusted_state(repository);
+    const fs::path current = g_cache / "repositories" / repository.name / "current";
+    if (!fs::exists(current) && !fs::is_symlink(current)) return state.sequence;
+    verify_repository_cache(repository);
+    return std::max(state.sequence, cached_sequence(current));
+}
+
+void verify_repository_cache(const Repository &repository) {
+    const fs::path cache = g_cache / "repositories" / repository.name;
+    const fs::path snapshots = cache / "snapshots";
+    struct stat cache_status{};
+    if (lstat(cache.c_str(), &cache_status) != 0) {
+        if (errno == ENOENT) return;
+        throw std::runtime_error("cannot inspect signed repository cache: " + repository.name);
+    }
+    require_root_owned_chain({
+        target_path("/var/cache"), target_path("/var/cache/kumo"),
+        target_path("/var/cache/kumo/kpm"), target_path("/var/cache/kumo/kpm/repositories"),
+        cache, snapshots,
+    });
+    const fs::path current = cache / "current";
+    struct stat link_status{};
+    if (lstat(current.c_str(), &link_status) != 0) {
+        if (errno == ENOENT) return;
+        throw std::runtime_error("cannot inspect signed repository cache pointer: " + repository.name);
+    }
+    if (!S_ISLNK(link_status.st_mode))
+        throw std::runtime_error("signed repository cache pointer is not a symlink: " + repository.name);
+    require_root_owned_directory(fs::canonical(current));
+    const fs::path snapshot_file = current / "snapshot.toml";
+    struct stat file_status{};
+    if (stat(snapshot_file.c_str(), &file_status) != 0 || !S_ISREG(file_status.st_mode)
+        || file_status.st_uid != 0 || (file_status.st_mode & (S_IWGRP | S_IWOTH)) != 0)
+        throw std::runtime_error("cached signed snapshot is not protected root-owned state: "
+                                 + repository.name);
+}
+
 std::vector<Package> load_repo_packages(const bool enabled_only = true) {
     std::vector<Package> packages;
     for (const auto &repository : load_repositories()) {
         if (enabled_only && !repository.enabled) continue;
         const fs::path index = repository.path / "index.toml";
+        if (repository.remote) verify_repository_cache(repository);
         if (!fs::is_regular_file(index))
             throw std::runtime_error(repository.remote
                 ? "repository has not been refreshed: " + repository.name
@@ -793,6 +1139,11 @@ std::vector<Package> load_repo_packages(const bool enabled_only = true) {
             const fs::path metadata = repository.path / "repo.toml";
             if (!fs::is_regular_file(metadata))
                 throw std::runtime_error("repository metadata missing from cache: " + repository.name);
+            const SignedSnapshot snapshot = verify_signed_snapshot(repository, repository.path);
+            verify_snapshot_files(snapshot, repository.path);
+            if (snapshot.sequence < load_trusted_state(repository).sequence)
+                throw std::runtime_error("cached signed repository snapshot is older than trust state: "
+                                         + repository.name);
             const auto expected_count = validate_repository_metadata(read_text(metadata), repository);
             auto records = parse_repo_index(read_text(index), repository);
             if (records.size() != expected_count)
@@ -809,25 +1160,69 @@ std::vector<Package> load_repo_packages(const bool enabled_only = true) {
 std::size_t refresh_remote_repository(const Repository &repository) {
     const fs::path cache = g_cache / "repositories" / repository.name;
     const fs::path snapshots = cache / "snapshots";
+    fs::create_directories(cache);
+    require_root_owned_directory(cache);
     fs::create_directories(snapshots);
+    require_root_owned_directory(snapshots);
+    fs::permissions(cache, fs::perms::owner_all | fs::perms::group_read
+        | fs::perms::group_exec | fs::perms::others_read | fs::perms::others_exec,
+        fs::perm_options::replace);
+    verify_repository_cache(repository);
     const auto nonce = std::chrono::steady_clock::now().time_since_epoch().count();
     const std::string unique = std::to_string(getpid()) + "-" + std::to_string(nonce);
     const fs::path staging = snapshots / (".refresh-" + unique);
     const fs::path snapshot = snapshots / ("snapshot-" + unique);
     fs::create_directory(staging);
     try {
+        download_https(repository.url + "/snapshot.toml", staging / "snapshot.toml", 64 * 1024);
+        download_https(repository.url + "/snapshot.toml.sig", staging / "snapshot.toml.sig", 64 * 1024);
+        const SignedSnapshot signed_snapshot = verify_signed_snapshot(repository, staging);
+
+        const fs::path current = cache / "current";
+        std::string current_snapshot;
+        const TrustedState persisted_state = load_trusted_state(repository);
+        std::uint64_t current_sequence = 0;
+        if (fs::exists(current) || fs::is_symlink(current)) {
+            if (!fs::is_symlink(current))
+                throw std::runtime_error("trusted repository cache pointer is not a symlink: " + repository.name);
+            verify_repository_cache(repository);
+            current_sequence = cached_sequence(current, &current_snapshot);
+        }
+        const std::string new_snapshot = read_text(staging / "snapshot.toml");
+        const std::uint64_t highest_sequence = std::max(persisted_state.sequence, current_sequence);
+        if (signed_snapshot.sequence < highest_sequence)
+            throw std::runtime_error("signed repository rollback detected: " + repository.name);
+        if (signed_snapshot.sequence == highest_sequence && highest_sequence != 0
+            && !((current_sequence == highest_sequence && new_snapshot == current_snapshot)
+                || (persisted_state.sequence == highest_sequence
+                    && sha256_bytes(new_snapshot) == persisted_state.snapshot_hash)))
+            throw std::runtime_error("signed repository sequence was reused with different metadata: "
+                                     + repository.name);
+
         download_https(repository.url + "/repo.toml", staging / "repo.toml", 4 * 1024 * 1024);
         download_https(repository.url + "/index.toml", staging / "index.toml", 4 * 1024 * 1024);
+        verify_snapshot_files(signed_snapshot, staging);
         const auto expected_count = validate_repository_metadata(read_text(staging / "repo.toml"), repository);
         const auto packages = parse_repo_index(read_text(staging / "index.toml"), repository);
         if (packages.size() != expected_count)
             throw std::runtime_error("repository metadata package count mismatch: " + repository.name);
+        for (const std::string &filename : {"snapshot.toml", "snapshot.toml.sig", "repo.toml", "index.toml"})
+            sync_path(staging / filename);
+        sync_path(staging, O_DIRECTORY);
         fs::rename(staging, snapshot);
+        sync_path(snapshots, O_DIRECTORY);
 
         const fs::path temporary_link = cache / ("current.tmp-" + unique);
-        const fs::path current = cache / "current";
         fs::create_symlink(fs::path("snapshots") / snapshot.filename(), temporary_link);
         fs::rename(temporary_link, current);
+        sync_path(cache, O_DIRECTORY);
+        for (const fs::path &directory : {
+                 cache.parent_path(), cache.parent_path().parent_path(),
+                 cache.parent_path().parent_path().parent_path(),
+                 cache.parent_path().parent_path().parent_path().parent_path(),
+             })
+            sync_path(directory, O_DIRECTORY);
+        save_trusted_state(repository, signed_snapshot.sequence, sha256_bytes(new_snapshot));
 
         std::error_code error;
         const auto active = fs::read_symlink(current).filename();
@@ -1342,10 +1737,17 @@ void remove_package(const std::string &name, const bool yes) {
 }
 
 void command_repo_list() {
-    for (const auto &repository : load_repositories())
+    for (const auto &repository : load_repositories()) {
         std::cout << repository.name << "\t"
                   << (repository.remote ? repository.url : repository.configured_path)
-                  << "\t" << (repository.enabled ? "enabled" : "disabled") << "\n";
+                  << "\t" << (repository.enabled ? "enabled" : "disabled")
+                  << "\t" << (repository.remote ? "ed25519 " + repository.key_id : "local");
+        if (repository.remote) {
+            const std::uint64_t sequence = highest_trusted_sequence(repository);
+            std::cout << "\tsequence=" << (sequence ? std::to_string(sequence) : "not-refreshed");
+        }
+        std::cout << "\n";
+    }
 }
 
 std::string repository_config(const std::vector<Repository> &repositories) {
@@ -1356,12 +1758,20 @@ std::string repository_config(const std::vector<Repository> &repositories) {
             config += "url = " + toml_quote(repository.url) + "\n";
         else
             config += "path = " + toml_quote(repository.configured_path) + "\n";
+        if (repository.remote) {
+            config += "trust = " + toml_quote(repository.trust) + "\n";
+            config += "key_id = " + toml_quote(repository.key_id) + "\n";
+            config += "channel = " + toml_quote(repository.channel) + "\n";
+        } else {
+            config += "trust = \"local\"\n";
+        }
         config += std::string("enabled = ") + (repository.enabled ? "true\n\n" : "false\n\n");
     }
     return config;
 }
 
-void command_repo_add(const std::string &name, const std::string &location) {
+void command_repo_add(const std::string &name, const std::string &location,
+                      const std::string &key_id = {}) {
     if (!valid_repo_name(name))
         throw std::runtime_error("invalid repository name");
     Repository added;
@@ -1369,7 +1779,14 @@ void command_repo_add(const std::string &name, const std::string &location) {
     if (location.rfind("https://", 0) == 0) {
         added.remote = true;
         added.url = normalize_https_url(location);
+        added.trust = "ed25519";
+        added.key_id = key_id;
+        if (!valid_key_id(added.key_id))
+            throw std::runtime_error("HTTPS repository requires an authorized sha256:<key fingerprint>");
+        if (!fs::is_regular_file(trusted_key_path(added.key_id)))
+            throw std::runtime_error("repository signing key is not installed: " + added.key_id);
     } else {
+        if (!key_id.empty()) throw std::runtime_error("a key ID is only valid for an HTTPS repository");
         const fs::path absolute(location);
         if (!absolute.is_absolute()) throw std::runtime_error("repository path must be absolute");
         added.configured_path = absolute.string();
@@ -1537,10 +1954,11 @@ int main_impl(int argc, char **argv) {
     if (command == "verify" && args.size() == 2) { command_verify(args[1]); return 0; }
     if (command == "repo" && args.size() >= 2) {
         if (args[1] == "list" && args.size() == 2) command_repo_list();
-        else if (args[1] == "add" && args.size() == 4) command_repo_add(args[2], args[3]);
+        else if (args[1] == "add" && (args.size() == 4 || args.size() == 5))
+            command_repo_add(args[2], args[3], args.size() == 5 ? args[4] : "");
         else if (args[1] == "remove" && args.size() == 3) command_repo_remove(args[2]);
         else if (args[1] == "refresh" && args.size() == 2) command_repo_refresh();
-        else throw std::runtime_error("usage: kpm repo list|add <name> <path>|remove <name>|refresh");
+        else throw std::runtime_error("usage: kpm repo list|add <name> <path>|add <name> <https-url> <key-id>|remove <name>|refresh");
         return 0;
     }
     if (command == "install" && args.size() == 2) {
