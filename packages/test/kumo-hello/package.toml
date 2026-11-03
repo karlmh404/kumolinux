@@ -1,0 +1,14 @@
+[package]
+name = "kumo-hello"
+version = "1.0"
+release = 1
+description = "Kumo package manager test command"
+[source]
+local = true
+url = "local"
+[build]
+system = "custom"
+script = "build.sh"
+[dependencies]
+build = ["glibc-runtime"]
+runtime = ["glibc-runtime"]

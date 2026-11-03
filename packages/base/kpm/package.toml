@@ -1,0 +1,14 @@
+[package]
+name = "kpm"
+version = "0.2.0"
+release = 1
+description = "Kumo Package Manager"
+[source]
+local = true
+url = "local"
+[build]
+system = "custom"
+script = "build.sh"
+[dependencies]
+build = ["glibc-runtime", "curl"]
+runtime = ["glibc-runtime", "curl"]

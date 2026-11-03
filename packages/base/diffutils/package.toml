@@ -1,0 +1,14 @@
+[package]
+name = "diffutils"
+version = "3.12"
+release = 1
+description = "GNU file comparison utilities"
+[source]
+url = "https://ftp.gnu.org/gnu/diffutils/diffutils-3.12.tar.xz"
+sha256 = "7c8b7f9fc8609141fdea9cece85249d308624391ff61dedaf528fcb337727dfd"
+[build]
+system = "autotools"
+configure_args = ["--disable-nls"]
+[dependencies]
+build = ["glibc-runtime"]
+runtime = ["glibc-runtime"]

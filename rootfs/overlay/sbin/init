@@ -1,0 +1,39 @@
+#!/bin/sh
+export PATH=/sbin:/bin:/usr/sbin:/usr/bin
+export HOME=/root
+export PS1='kumo:\w\$ '
+mountpoint -q /proc || mount -t proc proc /proc
+mountpoint -q /sys || mount -t sysfs sysfs /sys
+mountpoint -q /dev || mount -t devtmpfs devtmpfs /dev
+mkdir -p /run
+mountpoint -q /run || mount -t tmpfs -o mode=0755,nosuid,nodev tmpfs /run
+hostname kumo
+if [ -b /dev/vda ]; then
+  mkdir -p /newroot
+  if mount -t ext4 -o rw /dev/vda /newroot; then
+    mount --move /proc /newroot/proc
+    mount --move /sys /newroot/sys
+    mount --move /dev /newroot/dev
+    mount --move /run /newroot/run
+    if [ -x /newroot/init ]; then
+      exec switch_root /newroot /init
+    fi
+    if [ -x /newroot/sbin/init ]; then
+      exec switch_root /newroot /sbin/init
+    fi
+    echo 'Kumo: no valid init target in /newroot; entering rescue shell' >/dev/console
+  fi
+  echo 'Kumo: failed to mount /dev/vda; entering rescue shell' >/dev/console
+fi
+trap ':' INT TERM HUP
+printf '\nKumo Linux 0.0.1 "Sora"\n\nKernel: %s\nArchitecture: %s\n\n' "$(uname -r)" "$(uname -m)"
+while :; do
+  setsid cttyhack /bin/sh -l </dev/console >/dev/console 2>&1
+  rc=$?
+  sync
+  printf 'Shell exited (%s). Powering off.\n' "$rc" >/dev/console
+  poweroff -f
+  sleep 1
+done
+
+

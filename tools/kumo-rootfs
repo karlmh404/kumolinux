@@ -1,0 +1,119 @@
+#!/usr/bin/env python3
+"""Assemble a collision-checked Kumo root filesystem from staged packages."""
+from __future__ import annotations
+import argparse, os, shutil, stat, subprocess, tomllib
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[1]
+OUT = ROOT / "out"
+ALLOWED_REPLACEMENTS = {"/usr/share/info/dir", "/sbin/nologin", "/sbin/sulogin", "/usr/sbin/nologin", "/usr/sbin/sulogin"}
+
+def fail(message): raise SystemExit(f"[kumo-rootfs] ERROR: {message}")
+
+
+def fix_root_ownership(path: Path) -> None:
+    if os.geteuid() == 0:
+        for entry in sorted(path.rglob("*"), key=lambda item: str(item)):
+            if entry.is_symlink() or not entry.exists():
+                continue
+            os.chown(entry, 0, 0)
+        return
+    if shutil.which("sudo") and subprocess.run(["sudo", "-n", "true"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode == 0:
+        subprocess.run(["sudo", "-n", "chown", "-R", "0:0", str(path)], check=True)
+        return
+    fail(f"rootfs assembly must run as root or passwordless sudo; current uid={os.getuid()} gid={os.getgid()}")
+
+
+def copy_entry(source: Path, destination: Path, owner: str, owners: dict[str, str]):
+    relative = "/" + str(destination.relative_to(OUT/"rootfs-base"))
+    if destination.exists() or destination.is_symlink():
+        previous = owners.get(relative, "overlay")
+        if source.is_dir() and destination.is_dir(): return
+        if source.is_symlink() and destination.is_symlink() and os.readlink(source) == os.readlink(destination): return
+        if source.is_file() and destination.is_file() and source.read_bytes() == destination.read_bytes(): return
+        if relative in ALLOWED_REPLACEMENTS: return
+        fail(f"file collision at {relative}: {previous} and {owner}")
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    if source.is_symlink(): destination.symlink_to(os.readlink(source))
+    elif source.is_dir(): destination.mkdir(exist_ok=True)
+    else: shutil.copy2(source, destination)
+    owners[relative] = owner
+
+def merge_tree(source: Path, destination: Path, owner: str, owners: dict[str, str]):
+    for item in sorted(source.rglob("*")):
+        copy_entry(item, destination/item.relative_to(source), owner, owners)
+
+def main():
+    parser = argparse.ArgumentParser(); parser.add_argument("action", choices=["assemble"]); parser.add_argument("profile", choices=["base"]); parser.parse_args()
+    target = OUT/"rootfs-base"
+    if target.exists(): shutil.rmtree(target)
+    target.mkdir(parents=True)
+    owners = {}
+    names = [line.strip() for line in (ROOT/"config/base-packages.txt").read_text().splitlines() if line.strip() and not line.startswith("#")]
+    pkgdb = target/"var/lib/kumo/packages"; pkgdb.mkdir(parents=True)
+    for name in names:
+        package = OUT/"packages"/name
+        if not (package/".complete").exists(): fail(f"package is not complete: {name}")
+        merge_tree(package/"root", target, name, owners)
+        record = pkgdb/name; record.mkdir()
+        shutil.copy2(package/"metadata.toml", record/"metadata.toml")
+        shutil.copy2(package/"manifest.txt", record/"manifest.txt")
+    merge_tree(ROOT/"rootfs/base-overlay", target, "kumo-base-overlay", owners)
+    resolv_conf = target/"etc/resolv.conf"
+    if resolv_conf.exists() and not resolv_conf.is_symlink():
+        fail("/etc/resolv.conf must be a systemd-resolved symlink")
+    if resolv_conf.is_symlink():
+        resolv_conf.unlink()
+    resolv_conf.symlink_to("/run/systemd/resolve/stub-resolv.conf")
+    repository = OUT/"repository/x86_64"
+    if not (repository/"index.toml").is_file():
+        fail(f"local repository index is missing: {repository}; run make repo")
+    shutil.copytree(repository, target/"var/lib/kumo/repos/base", dirs_exist_ok=True, symlinks=True)
+    for old, new in (("bin", "usr/bin"), ("sbin", "usr/sbin"), ("lib", "usr/lib"), ("lib64", "usr/lib")):
+        path = target/old
+        if path.exists() and not path.is_symlink():
+            merge_tree(path, target/new, f"merged-{old}", owners); shutil.rmtree(path)
+        if not path.exists(): path.symlink_to(new)
+    for path, mode in (("tmp", 0o1777), ("var/tmp", 0o1777), ("root", 0o700), ("run", 0o755),
+                       ("proc", 0o555), ("sys", 0o555), ("dev", 0o755)):
+        item=target/path; item.mkdir(parents=True, exist_ok=True); item.chmod(mode)
+    (target/"etc/machine-id").touch()
+    for name in ("sulogin", "nologin"):
+        source = target / "usr" / "bin" / name
+        if not source.exists():
+            source = target / "bin" / name
+        if source.exists():
+            for link_path in (target / "usr" / "sbin" / name, target / "sbin" / name):
+                link_path.parent.mkdir(parents=True, exist_ok=True)
+                if not link_path.exists() and not link_path.is_symlink():
+                    link_path.symlink_to(os.path.relpath(source, link_path.parent))
+    links = {
+        "etc/systemd/system/default.target": "/usr/lib/systemd/system/multi-user.target",
+        "etc/systemd/system/getty.target.wants/serial-getty@ttyS0.service": "/usr/lib/systemd/system/serial-getty@.service",
+        "usr/bin/sh": "dash",
+        "usr/bin/init": "../lib/systemd/systemd",
+    }
+    for name, destination in links.items():
+        link = target/name; link.parent.mkdir(parents=True, exist_ok=True)
+        if link.exists() or link.is_symlink(): link.unlink()
+        link.symlink_to(destination)
+    for relpath in ("init", "sbin/init"):
+        destination = target / relpath
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        if destination.exists() or destination.is_symlink():
+            if destination.is_dir() and not destination.is_symlink():
+                shutil.rmtree(destination)
+            else:
+                destination.unlink()
+        src = target / "usr/lib/systemd/systemd"
+        shutil.copy2(src, destination)
+        destination.chmod(0o755)
+    subprocess.run(["systemctl", f"--root={target}", "preset",
+                    "systemd-networkd.service", "systemd-resolved.service"], check=True)
+    subprocess.run(["systemctl", f"--root={target}", "disable",
+                    "systemd-networkd-wait-online.service"], check=True)
+    fix_root_ownership(target)
+    print(f"[kumo-rootfs] assembled {len(names)} packages into {target}")
+
+if __name__ == "__main__": main()
+

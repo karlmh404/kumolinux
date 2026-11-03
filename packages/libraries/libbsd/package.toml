@@ -1,0 +1,14 @@
+[package]
+name = "libbsd"
+version = "0.12.2"
+release = 1
+description = "BSD compatibility library"
+[source]
+url = "https://libbsd.freedesktop.org/releases/libbsd-0.12.2.tar.xz"
+sha256 = "b88cc9163d0c652aaf39a99991d974ddba1c3a9711db8f1b5838af2a14731014"
+[build]
+system = "autotools"
+configure_args = ["--disable-static"]
+[dependencies]
+build = ["glibc-runtime", "libmd"]
+runtime = ["glibc-runtime", "libmd"]

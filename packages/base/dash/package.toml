@@ -1,0 +1,14 @@
+[package]
+name = "dash"
+version = "0.5.12"
+release = 1
+description = "POSIX shell"
+[source]
+url = "https://git.kernel.org/pub/scm/utils/dash/dash.git/snapshot/dash-0.5.12.tar.gz"
+sha256 = "0d632f6b945058d84809cac7805326775bd60cb4a316907d0bd4228ff7107154"
+[build]
+system = "custom"
+script = "build.sh"
+[dependencies]
+build = ["glibc-runtime"]
+runtime = ["glibc-runtime"]

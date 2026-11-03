@@ -1,0 +1,23 @@
+--- a/lib/stdlib.in.h
++++ b/lib/stdlib.in.h
+@@ -222,6 +222,9 @@
+ #endif
+ 
+ 
++/* glibc 2.44 exposes C23 const-generic overloads under _GNU_SOURCE.  */
++#undef bsearch
++
+ /* Declarations for ISO C N3322.  */
+ #if defined __GNUC__ && __GNUC__ >= 15 && !defined __clang__
+ _GL_EXTERN_C void *bsearch (const void *__key,
+--- a/lib/wchar.in.h
++++ b/lib/wchar.in.h
+@@ -300,6 +300,8 @@
+ # endif
+   _GL_ATTRIBUTE_NONNULL_IF_NONZERO (1, 3)
+   _GL_ATTRIBUTE_NONNULL_IF_NONZERO (2, 3);
++/* glibc 2.44 exposes a C23 const-generic overload under _GNU_SOURCE.  */
++# undef wmemchr
+ # ifndef __cplusplus
+ _GL_EXTERN_C wchar_t *wmemchr (const wchar_t *__s, wchar_t __wc, size_t __n)
+   _GL_ATTRIBUTE_NONNULL_IF_NONZERO (1, 3);

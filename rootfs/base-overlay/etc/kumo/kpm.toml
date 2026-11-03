@@ -1,0 +1,6 @@
+architecture = "x86_64"
+
+[[repository]]
+name = "base"
+path = "/var/lib/kumo/repos/base"
+enabled = true

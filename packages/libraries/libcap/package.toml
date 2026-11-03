@@ -1,0 +1,15 @@
+[package]
+name = "libcap"
+version = "2.76"
+release = 1
+description = "POSIX capabilities library"
+[source]
+url = "https://mirrors.edge.kernel.org/pub/linux/libs/security/linux-privs/libcap2/libcap-2.76.tar.xz"
+sha256 = "629da4ab29900d0f7fcc36227073743119925fd711c99a1689bbf5c9b40c8e6f"
+[build]
+system = "make"
+make_args = ["CROSS_COMPILE=x86_64-kumo-linux-gnu-", "PAM_CAP=no", "RAISE_SETFCAP=no", "USE_GPERF=no"]
+install_args = ["CROSS_COMPILE=x86_64-kumo-linux-gnu-", "PAM_CAP=no", "RAISE_SETFCAP=no", "USE_GPERF=no", "prefix=/usr", "lib=lib"]
+[dependencies]
+build = ["glibc-runtime"]
+runtime = ["glibc-runtime"]

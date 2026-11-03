@@ -1,0 +1,2 @@
+#!/bin/sh
+printf '%s\n' 'Hello from the Kumo dependency test.'

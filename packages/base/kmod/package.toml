@@ -1,0 +1,14 @@
+[package]
+name = "kmod"
+version = "34.2"
+release = 1
+description = "Linux kernel module tools"
+[source]
+url = "https://mirrors.edge.kernel.org/pub/linux/utils/kernel/kmod/kmod-34.2.tar.xz"
+sha256 = "5a5d5073070cc7e0c7a7a3c6ec2a0e1780850c8b47b3e3892226b93ffcb9cb54"
+[build]
+system = "meson"
+configure_args = ["-Dmanpages=false", "-Dbuild-tests=false", "-Ddocs=false", "-Dopenssl=disabled", "-Dzstd=enabled", "-Dxz=enabled", "-Dzlib=enabled"]
+[dependencies]
+build = ["glibc-runtime", "zlib", "zstd", "xz"]
+runtime = ["glibc-runtime", "zlib", "zstd", "xz"]

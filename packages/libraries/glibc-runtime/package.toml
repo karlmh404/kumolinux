@@ -1,0 +1,15 @@
+[package]
+name = "glibc-runtime"
+version = "2.44"
+release = 1
+description = "GNU C Library runtime from the Kumo cross-toolchain"
+[source]
+url = "https://ftp.gnu.org/gnu/glibc/glibc-2.44.tar.xz"
+filename = "glibc-2.44.tar.xz"
+sha256 = "37f600f2bef3c5e8300147059568b2a2e40a7ad6ccc65ce942556d49429cc667"
+[build]
+system = "custom"
+script = "build.sh"
+[dependencies]
+build = []
+runtime = []

@@ -1,0 +1,15 @@
+[package]
+name = "iputils"
+version = "20250605"
+release = 1
+description = "ICMP ping utility"
+[source]
+url = "https://github.com/iputils/iputils/archive/refs/tags/20250605.tar.gz"
+filename = "iputils-20250605.tar.gz"
+sha256 = "19e680c9eef8c079da4da37040b5f5453763205b4edfb1e2c114de77908927e4"
+[build]
+system = "meson"
+configure_args = ["-DUSE_CAP=false", "-DUSE_IDN=false", "-DBUILD_ARPING=false", "-DBUILD_CLOCKDIFF=false", "-DBUILD_PING=true", "-DBUILD_TRACEPATH=false", "-DBUILD_MANS=false", "-DSKIP_TESTS=true"]
+[dependencies]
+build = ["glibc-runtime"]
+runtime = ["glibc-runtime"]

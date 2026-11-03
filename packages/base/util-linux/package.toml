@@ -1,0 +1,14 @@
+[package]
+name = "util-linux"
+version = "2.41.2"
+release = 1
+description = "Essential Linux system utilities"
+[source]
+url = "https://mirrors.edge.kernel.org/pub/linux/utils/util-linux/v2.41/util-linux-2.41.2.tar.xz"
+sha256 = "6062a1d89b571a61932e6fc0211f36060c4183568b81ee866cf363bce9f6583e"
+[build]
+system = "autotools"
+configure_args = ["--disable-static", "--disable-nls", "--disable-bash-completion", "--disable-pylibmount", "--disable-liblastlog2", "--disable-pam-lastlog2", "--disable-lsfd", "--without-python", "--without-systemd", "--without-systemdsystemunitdir", "--without-udev", "--without-selinux", "--without-audit", "--disable-makeinstall-chown"]
+[dependencies]
+build = ["glibc-runtime", "libxcrypt", "zlib", "zstd", "xz"]
+runtime = ["glibc-runtime", "libxcrypt", "zlib", "zstd", "xz"]

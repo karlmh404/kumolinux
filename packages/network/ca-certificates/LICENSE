@@ -1,0 +1,5 @@
+Mozilla CA certificate store in PEM format, converted and published by the curl project.
+
+License: Mozilla Public License 2.0 (MPL-2.0).
+License text: https://mozilla.org/MPL/2.0/
+Upstream bundle: https://curl.se/ca/cacert-2026-10-20.pem

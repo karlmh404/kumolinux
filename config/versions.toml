@@ -1,0 +1,47 @@
+[kumo]
+version = "0.0.2"
+codename = "Sora"
+target = "x86_64-kumo-linux-gnu"
+
+[crosstool_ng]
+version = "1.29.0"
+filename = "crosstool-ng-1.29.0.tar.xz"
+url = "https://github.com/crosstool-ng/crosstool-ng/releases/download/crosstool-ng-1.29.0/crosstool-ng-1.29.0.tar.xz"
+sha256 = "1e0c5efcf2af674993b74a1783fe78727c8d34b500ebab07eb1bb0a45c8fcc87"
+
+[linux]
+version = "6.18.60"
+filename = "linux-6.18.60.tar.xz"
+url = "https://cdn.kernel.org/pub/linux/kernel/v6.x/linux-6.18.60.tar.xz"
+sha256 = "3c2f44ef6acc021a7ad444d9a2e6ec1ef488ff09368793d0004a6080f69d621e"
+
+[busybox]
+version = "1.37.0"
+filename = "busybox-1.37.0.tar.bz2"
+url = "https://busybox.net/downloads/busybox-1.37.0.tar.bz2"
+sha256 = "3311dff32e746499f4df0d5df04d7eb396382d7e108bb9250e7b519b837043a4"
+
+[gcc]
+version = "16.2.0"
+filename = "gcc-16.2.0.tar.xz"
+url = "https://ftp.gnu.org/gnu/gcc/gcc-16.2.0/gcc-16.2.0.tar.xz"
+sha256 = "managed-by-crosstool-ng-1.29.0"
+
+[binutils]
+version = "2.47"
+filename = "binutils-2.47.tar.xz"
+url = "https://ftp.gnu.org/gnu/binutils/binutils-2.47.tar.xz"
+sha256 = "managed-by-crosstool-ng-1.29.0"
+
+[glibc]
+version = "2.44"
+filename = "glibc-2.44.tar.xz"
+url = "https://ftp.gnu.org/gnu/glibc/glibc-2.44.tar.xz"
+sha256 = "managed-by-crosstool-ng-1.29.0"
+
+[linux_headers]
+version = "6.18.60"
+filename = "linux-6.18.60.tar.xz"
+url = "https://cdn.kernel.org/pub/linux/kernel/v6.x/linux-6.18.60.tar.xz"
+sha256 = "3c2f44ef6acc021a7ad444d9a2e6ec1ef488ff09368793d0004a6080f69d621e"
+

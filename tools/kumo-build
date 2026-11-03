@@ -1,0 +1,340 @@
+#!/usr/bin/env python3
+"""Kumo source-package builder and .kpkg packager (format v1)."""
+from __future__ import annotations
+
+import argparse, hashlib, json, os, shutil, stat, subprocess, sys, tarfile, tomllib
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[1]
+OUT = ROOT / "out"
+WORK = ROOT / "work" / "packages"
+CACHE = ROOT / "cache" / "packages"
+RECIPES = ROOT / "packages"
+TARGET = "x86_64-kumo-linux-gnu"
+TOOLCHAIN = OUT / "toolchain"
+SOURCE_DATE_EPOCH = "1762128000"
+
+def fail(message: str) -> None:
+    raise SystemExit(f"[kumo-build] ERROR: {message}")
+
+def run(command, *, cwd=None, env=None, log=None) -> None:
+    printable = " ".join(map(str, command))
+    print(f"[kumo-build] + {printable}", flush=True)
+    if log:
+        with log.open("a", encoding="utf-8") as stream:
+            stream.write(f"+ {printable}\n")
+            result = subprocess.run(command, cwd=cwd, env=env, stdout=stream,
+                                    stderr=subprocess.STDOUT)
+    else:
+        result = subprocess.run(command, cwd=cwd, env=env)
+    if result.returncode:
+        fail(f"command failed ({result.returncode}); see {log or 'output above'}")
+
+def remove_tree(path: Path) -> None:
+    if not path.exists(): return
+    for directory, dirs, files in os.walk(path):
+        os.chmod(directory, os.stat(directory).st_mode | stat.S_IWUSR)
+    shutil.rmtree(path)
+
+def recipes() -> dict[str, tuple[Path, dict]]:
+    found = {}
+    for path in sorted(RECIPES.glob("**/package.toml")):
+        with path.open("rb") as stream:
+            data = tomllib.load(stream)
+        name = data["package"]["name"]
+        if name in found:
+            fail(f"duplicate recipe: {name}")
+        found[name] = (path, data)
+    return found
+
+def order(selected: list[str], catalog: dict) -> list[str]:
+    result, state = [], {}
+    def visit(name: str):
+        if name not in catalog:
+            fail(f"unknown package dependency: {name}")
+        if state.get(name) == 1:
+            fail(f"dependency cycle involving {name}")
+        if state.get(name) == 2:
+            return
+        state[name] = 1
+        data = catalog[name][1]
+        for dep in data.get("dependencies", {}).get("build", []):
+            visit(dep)
+        for dep in data.get("dependencies", {}).get("runtime", []):
+            visit(dep)
+        state[name] = 2
+        result.append(name)
+    for item in selected:
+        visit(item)
+    return result
+
+def sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as stream:
+        for block in iter(lambda: stream.read(1024 * 1024), b""):
+            digest.update(block)
+    return digest.hexdigest()
+
+def fetch(data: dict) -> Path:
+    source = data["source"]
+    filename = source.get("filename") or source["url"].rsplit("/", 1)[-1]
+    archive = CACHE / filename
+    CACHE.mkdir(parents=True, exist_ok=True)
+    if not archive.exists():
+        run(["curl", "--fail", "--location", "--retry", "3", "--output", str(archive), source["url"]])
+    actual = sha256(archive)
+    if actual != source["sha256"]:
+        fail(f"SHA-256 mismatch for {filename}: expected {source['sha256']}, got {actual}")
+    return archive
+
+def local_source_hash(path: Path) -> str:
+    digest = hashlib.sha256()
+    for item in sorted(path.rglob("*"), key=lambda entry: entry.relative_to(path).as_posix()):
+        if item.is_file() and item.name != "package.toml":
+            digest.update(item.relative_to(path).as_posix().encode() + b"\0")
+            digest.update(bytes.fromhex(sha256(item)))
+    return digest.hexdigest()
+
+def unpack(archive: Path, source: Path) -> None:
+    if source.exists():
+        remove_tree(source)
+    source.mkdir(parents=True)
+    with tarfile.open(archive) as tf:
+        members = tf.getmembers()
+        roots = {Path(m.name).parts[0] for m in members if m.name and Path(m.name).parts}
+        tf.extractall(source, filter="data")
+    if len(roots) == 1:
+        child = source / next(iter(roots))
+        if child.is_dir():
+            temporary = source.with_name(source.name + ".unpacked")
+            child.rename(temporary)
+            source.rmdir()
+            temporary.rename(source)
+
+def build_sysroot(catalog: dict, name: str, destination: Path) -> None:
+    if destination.exists():
+        remove_tree(destination)
+    shutil.copytree(TOOLCHAIN / TARGET / "sysroot", destination, symlinks=True)
+    for directory, dirs, files in os.walk(destination):
+        os.chmod(directory, os.stat(directory).st_mode | stat.S_IWUSR)
+    closure = order([name], catalog)[:-1]
+    for dep in closure:
+        if dep == "glibc-runtime":
+            continue
+        root = OUT / "packages" / dep / "root"
+        if not root.exists():
+            fail(f"dependency {dep} is not staged")
+        shutil.copytree(root, destination, dirs_exist_ok=True, symlinks=True,
+                        ignore=shutil.ignore_patterns("*.la"))
+
+def environment(sysroot: Path) -> dict[str, str]:
+    bindir = TOOLCHAIN / "bin"
+    env = os.environ.copy()
+    env.update({
+        "PATH": f"{bindir}:{env['PATH']}", "SOURCE_DATE_EPOCH": SOURCE_DATE_EPOCH,
+        "LC_ALL": "C", "TZ": "UTC", "TARGET": TARGET, "SYSROOT": str(sysroot),
+        "TOOLCHAIN_DIR": str(TOOLCHAIN),
+        "FORCE_UNSAFE_CONFIGURE": "1",
+        "CC": f"{TARGET}-gcc --sysroot={sysroot}",
+        "CXX": f"{TARGET}-g++ --sysroot={sysroot}",
+        "AR": f"{TARGET}-ar", "AS": f"{TARGET}-as", "LD": f"{TARGET}-ld",
+        "NM": f"{TARGET}-nm", "RANLIB": f"{TARGET}-ranlib",
+        "READELF": f"{TARGET}-readelf", "STRIP": f"{TARGET}-strip",
+        "PKG_CONFIG_SYSROOT_DIR": str(sysroot),
+        "PKG_CONFIG_LIBDIR": ":".join(map(str, [sysroot/"usr/lib/pkgconfig", sysroot/"usr/share/pkgconfig", sysroot/"lib/pkgconfig"])),
+        "PKG_CONFIG_PATH": "", "CONFIG_SITE": str(ROOT / "config" / "cross.site"),
+        "CFLAGS": f"--sysroot={sysroot} -std=gnu17 -O2 -pipe -fdebug-prefix-map={ROOT}=/usr/src/kumo",
+        "CXXFLAGS": f"--sysroot={sysroot} -std=gnu++17 -O2 -pipe -fdebug-prefix-map={ROOT}=/usr/src/kumo",
+        "LDFLAGS": f"--sysroot={sysroot} -Wl,-rpath-link,{sysroot}/usr/lib -Wl,-rpath-link,{sysroot}/lib",
+    })
+    return env
+
+def write_cross_files(sysroot: Path, build: Path) -> tuple[Path, Path]:
+    meson = build / "kumo-cross.ini"
+    meson.write_text(f"""[binaries]
+c = '{TARGET}-gcc'
+cpp = '{TARGET}-g++'
+ar = '{TARGET}-ar'
+strip = '{TARGET}-strip'
+pkg-config = 'pkg-config'
+[properties]
+sys_root = '{sysroot}'
+pkg_config_libdir = ['{sysroot}/usr/lib/pkgconfig', '{sysroot}/usr/share/pkgconfig']
+[built-in options]
+c_args = ['--sysroot={sysroot}', '-Wno-error=discarded-qualifiers']
+c_link_args = ['--sysroot={sysroot}']
+[host_machine]
+system = 'linux'
+cpu_family = 'x86_64'
+cpu = 'x86_64'
+endian = 'little'
+""", encoding="utf-8")
+    cmake = build / "kumo-toolchain.cmake"
+    cmake.write_text(f"""set(CMAKE_SYSTEM_NAME Linux)
+set(CMAKE_SYSTEM_PROCESSOR x86_64)
+set(CMAKE_SYSROOT {sysroot})
+set(CMAKE_C_COMPILER {TARGET}-gcc)
+set(CMAKE_CXX_COMPILER {TARGET}-g++)
+set(CMAKE_FIND_ROOT_PATH {sysroot})
+set(CMAKE_FIND_ROOT_PATH_MODE_PROGRAM NEVER)
+set(CMAKE_FIND_ROOT_PATH_MODE_LIBRARY ONLY)
+set(CMAKE_FIND_ROOT_PATH_MODE_INCLUDE ONLY)
+set(CMAKE_FIND_ROOT_PATH_MODE_PACKAGE ONLY)
+""", encoding="utf-8")
+    return meson, cmake
+
+def build_one(name: str, catalog: dict) -> None:
+    recipe_path, data = catalog[name]
+    package = data["package"]
+    output = OUT / "packages" / name
+    root, build, source, sysroot = output/"root", WORK/name/"build", WORK/name/"source", WORK/name/"sysroot"
+    log = output / "build.log"
+    stamp = output / ".complete"
+    recipe_hash = sha256(recipe_path)
+    source_hash = local_source_hash(recipe_path.parent) if data.get("source", {}).get("local") else data["source"]["sha256"]
+    dependencies = data.get("dependencies", {}).get("build", []) + data.get("dependencies", {}).get("runtime", [])
+    dependency_fingerprints = []
+    for dependency in dict.fromkeys(dependencies):
+        dependency_stamp = OUT / "packages" / dependency / ".complete"
+        if not dependency_stamp.exists():
+            fail(f"{name}: dependency is not built: {dependency}")
+        dependency_fingerprints.append((dependency, dependency_stamp.read_text().strip()))
+    fingerprint = hashlib.sha256(json.dumps(
+        [recipe_hash, source_hash, data.get("build", {}), dependency_fingerprints],
+        sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+    if stamp.exists() and stamp.read_text().strip() == fingerprint:
+        print(f"[kumo-build] {name}: already complete")
+        return
+    if (stamp.exists() and stamp.read_text().strip() == recipe_hash
+            and root.is_dir()):
+        if os.access(output, os.W_OK):
+            stamp.write_text(fingerprint + "\n")
+        print(f"[kumo-build] {name}: reusing legacy staged root")
+        return
+    archive = None if data.get("source", {}).get("local") else fetch(data)
+    output.mkdir(parents=True, exist_ok=True)
+    for path in (root, build):
+        if path.exists(): remove_tree(path)
+        path.mkdir(parents=True)
+    log.write_text("", encoding="utf-8")
+    if data.get("source", {}).get("local"):
+        source = recipe_path.parent
+    else:
+        unpack(archive, source)
+    for patch_name in data.get("build", {}).get("patches", []):
+        run(["patch", "-d", str(source), "-p1", "-i", str(recipe_path.parent/patch_name)])
+    build_sysroot(catalog, name, sysroot)
+    env = environment(sysroot)
+    meson_cross, cmake_cross = write_cross_files(sysroot, build)
+    spec = data["build"]
+    system = spec["system"]
+    args = spec.get("configure_args", [])
+    jobs = str(max(1, (os.cpu_count() or 2) - 1))
+    if system == "autotools":
+        configure = source / spec.get("configure", "configure")
+        run([str(configure), f"--host={TARGET}", "--build=x86_64-pc-linux-gnu", "--prefix=/usr", *args], cwd=build, env=env, log=log)
+        run(["make", f"-j{jobs}"], cwd=build, env=env, log=log)
+        run(["make", f"DESTDIR={root}", "install"], cwd=build, env=env, log=log)
+    elif system == "meson":
+        meson = shutil.which("meson") or str(WORK.parent/"host-tools/meson/meson.py")
+        run([meson, "setup", str(build), str(source), "--cross-file", str(meson_cross), "--prefix=/usr", "--buildtype=release", *args], env=env, log=log)
+        run([meson, "compile", "-C", str(build), "-j", jobs], env=env, log=log)
+        run([meson, "install", "-C", str(build), "--destdir", str(root)], env=env, log=log)
+    elif system == "cmake":
+        run(["cmake", "-S", str(source), "-B", str(build), f"-DCMAKE_TOOLCHAIN_FILE={cmake_cross}", "-DCMAKE_INSTALL_PREFIX=/usr", *args], env=env, log=log)
+        run(["cmake", "--build", str(build), "-j", jobs], env=env, log=log)
+        env["DESTDIR"] = str(root)
+        run(["cmake", "--install", str(build)], env=env, log=log)
+    elif system == "make":
+        run(["make", "-C", str(source), f"-j{jobs}", *spec.get("make_args", [])], env=env, log=log)
+        run(["make", "-C", str(source), f"DESTDIR={root}", "PREFIX=/usr", "install", *spec.get("install_args", [])], env=env, log=log)
+    elif system == "custom":
+        script = recipe_path.parent / spec["script"]
+        custom = env | {"KUMO_SOURCE": str(source), "KUMO_BUILD": str(build), "KUMO_DESTDIR": str(root), "KUMO_RECIPE": str(recipe_path)}
+        run([str(script)], cwd=ROOT, env=custom, log=log)
+    else:
+        fail(f"unsupported build system {system} for {name}")
+    license_dir = root / "usr/share/licenses" / name
+    license_dir.mkdir(parents=True, exist_ok=True)
+    copied = False
+    for pattern in ("COPYING*", "LICENSE*", "LICENCE*", "License*"):
+        for item in source.glob(pattern):
+            if item.is_file():
+                shutil.copy2(item, license_dir/item.name)
+                copied = True
+    if not copied:
+        fail(f"{name}: upstream license file was not found")
+    stamp.write_text(fingerprint + "\n")
+
+def package_output(name: str, data: dict, output: Path, root: Path, recipe_hash: str, recipe_path: Path) -> None:
+    entries = []
+    installed_size = 0
+    for path in sorted(root.rglob("*"), key=lambda item: item.relative_to(root).as_posix()):
+        relative = path.relative_to(root).as_posix()
+        mode = stat.S_IMODE(path.lstat().st_mode)
+        if path.is_symlink():
+            target = os.readlink(path)
+            entries.append(f"l\t{mode:04o}\t{len(os.fsencode(target))}\t-\t{relative}\t{target}")
+        elif path.is_dir():
+            entries.append(f"d\t{mode:04o}\t0\t-\t{relative}")
+        elif path.is_file():
+            size = path.stat().st_size
+            installed_size += size
+            entries.append(f"f\t{mode:04o}\t{size}\t{sha256(path)}\t{relative}")
+        else:
+            fail(f"{name}: unsupported staged file type: {relative}")
+    (output/"manifest.txt").write_text("\n".join(entries) + "\n", encoding="utf-8")
+    p, s = data["package"], data["source"]
+    runtime = data.get("dependencies", {}).get("runtime", [])
+    source_hash = s.get("sha256") or (local_source_hash(recipe_path.parent) if s.get("local") else s["sha256"])
+    metadata = (
+        "kpkg_version = 1\n\n"
+        "[package]\n"
+        f'name = {json.dumps(name)}\nversion = {json.dumps(str(p["version"]))}\n'
+        f'release = {int(p["release"])}\narchitecture = "x86_64"\n'
+        f'description = {json.dumps(p.get("description", name))}\ninstalled_size = {installed_size}\n\n'
+        "[source]\n"
+        f'url = {json.dumps(s.get("url", "local"))}\nsha256 = "{source_hash}"\n\n'
+        "[build]\n"
+        f'recipe_sha256 = "{recipe_hash}"\n\n'
+        "[dependencies]\n"
+        f"runtime = {json.dumps(runtime)}\n"
+    )
+    (output/"metadata.toml").write_text(metadata, encoding="utf-8")
+    archive_dir = OUT / "packages"; archive_dir.mkdir(parents=True, exist_ok=True)
+    tar_path = output / f"{name}.tar"
+    env = os.environ | {"SOURCE_DATE_EPOCH": SOURCE_DATE_EPOCH}
+    tar_cmd = ["tar", "--format=ustar", "--sort=name", f"--mtime=@{SOURCE_DATE_EPOCH}", "--owner=0", "--group=0", "--numeric-owner", "-cf", str(tar_path), "metadata.toml", "manifest.txt", "-C", str(root.parent), "root"]
+    tar_without_sort = ["tar", "--format=ustar", f"--mtime=@{SOURCE_DATE_EPOCH}", "--owner=0", "--group=0", "--numeric-owner", "-cf", str(tar_path), "metadata.toml", "manifest.txt", "-C", str(root.parent), "root"]
+    result = subprocess.run(tar_cmd, cwd=output, env=env, capture_output=True, text=True)
+    if result.returncode != 0 and "--sort=name" in result.stderr.lower():
+        result = subprocess.run(tar_without_sort, cwd=output, env=env, capture_output=True, text=True)
+    if result.returncode != 0:
+        raise SystemExit("[kumo-build] ERROR: tar failed while packing {}: {}".format(name, result.stderr.strip() or result.stdout.strip()))
+    final = archive_dir / ("{0}-{1}-{2}-x86_64.kpkg".format(name, p["version"], p["release"]))
+    zstd = shutil.which("zstd") or str(WORK.parent/"host-tools/zstd/programs/zstd")
+    if not Path(zstd).is_file(): fail("zstd compressor missing; run scripts/build-host-tools.sh")
+    run([zstd, "-q", "-f", "-19", str(tar_path), "-o", str(final)])
+    tar_path.unlink()
+
+def main() -> None:
+    parser = argparse.ArgumentParser()
+    sub = parser.add_subparsers(dest="command", required=True)
+    package = sub.add_parser("package"); package.add_argument("name")
+    sub.add_parser("base")
+    args = parser.parse_args()
+    catalog = recipes()
+    selected = [args.name] if args.command == "package" else [line.strip() for line in (ROOT/"config/base-packages.txt").read_text().splitlines() if line.strip() and not line.startswith("#")]
+    ordered = order(selected, catalog)
+    for name in ordered:
+        build_one(name, catalog)
+    for name in ordered:
+        output = OUT / "packages" / name
+        package_output_dir = output
+        if not os.access(output, os.W_OK):
+            package_output_dir = OUT / ".package-scratch" / name
+            package_output_dir.mkdir(parents=True, exist_ok=True)
+        package_output(name, catalog[name][1], package_output_dir, output / "root", sha256(catalog[name][0]), catalog[name][0])
+
+if __name__ == "__main__":
+    main()

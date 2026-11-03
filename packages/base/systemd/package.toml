@@ -1,0 +1,15 @@
+[package]
+name = "systemd"
+version = "258.1"
+release = 1
+description = "Kumo service and system manager"
+[source]
+url = "https://github.com/systemd/systemd/archive/refs/tags/v258.1.tar.gz"
+filename = "v258.1.tar.gz"
+sha256 = "8eb34eaf2f78330217280bd7a923578f37e28d3f3ac5168e336ebc9cad84a34d"
+[build]
+system = "meson"
+configure_args = ["-Dmode=release", "-Dsplit-bin=false", "-Dtests=false", "-Dinstall-tests=false", "-Dman=disabled", "-Dhtml=disabled", "-Dtranslations=false", "-Dfirstboot=false", "-Dkernel-install=false", "-Dsysupdate=disabled", "-Dnetworkd=true", "-Dresolve=true", "-Dnss-resolve=disabled", "-Dtimesyncd=false", "-Dhomed=disabled", "-Duserdb=false", "-Dportabled=false", "-Dmachined=false", "-Dimportd=disabled", "-Dremote=disabled", "-Doomd=false", "-Dpstore=false", "-Drepart=disabled", "-Dbootloader=disabled", "-Dukify=disabled", "-Dlibcryptsetup=disabled", "-Dlibcurl=disabled", "-Dlibidn=disabled", "-Dlibidn2=disabled", "-Dopenssl=disabled", "-Dgnutls=disabled", "-Dgcrypt=disabled", "-Dqrencode=disabled", "-Dmicrohttpd=disabled", "-Dlibfido2=disabled", "-Dtpm2=disabled", "-Dseccomp=disabled", "-Dselinux=disabled", "-Dapparmor=disabled", "-Dpolkit=disabled", "-Dpam=disabled", "-Daudit=disabled", "-Dacl=disabled", "-Dblkid=enabled", "-Dfdisk=disabled", "-Dkmod=enabled", "-Dxz=enabled", "-Dzlib=enabled", "-Dzstd=enabled", "-Dldconfig=false", "-Dcoredump=false", "-Defi=false", "-Dhibernate=false", "-Ddefault-kill-user-processes=false"]
+[dependencies]
+build = ["glibc-runtime", "util-linux", "kmod", "libcap", "xz", "zlib", "zstd"]
+runtime = ["glibc-runtime", "util-linux", "kmod", "libcap", "xz", "zlib", "zstd"]

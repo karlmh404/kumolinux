@@ -1,0 +1,15 @@
+[package]
+name = "iproute2"
+version = "7.3.0"
+release = 1
+description = "Linux network configuration utilities"
+[source]
+url = "https://mirrors.edge.kernel.org/pub/linux/utils/net/iproute2/iproute2-7.3.0.tar.xz"
+filename = "iproute2-7.3.0.tar.xz"
+sha256 = "5c1789d290bba048a6135ed1ab81b0402dd0fb528d1f1421765c42b1fc3d6289"
+[build]
+system = "custom"
+script = "build.sh"
+[dependencies]
+build = ["glibc-runtime"]
+runtime = ["glibc-runtime"]

@@ -1,0 +1,15 @@
+[package]
+name = "procps-ng"
+version = "4.0.5"
+release = 1
+description = "Process monitoring utilities"
+[source]
+url = "https://sourceforge.net/projects/procps-ng/files/Production/procps-ng-4.0.5.tar.xz/download"
+filename = "procps-ng-4.0.5.tar.xz"
+sha256 = "c2e6d193cc78f84cd6ddb72aaf6d5c6a9162f0470e5992092057f5ff518562fa"
+[build]
+system = "autotools"
+configure_args = ["--disable-static", "--disable-nls", "--disable-kill", "--without-systemd", "--without-ncurses"]
+[dependencies]
+build = ["glibc-runtime"]
+runtime = ["glibc-runtime"]

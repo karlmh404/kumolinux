@@ -1,0 +1,10 @@
+NAME="Kumo Linux"
+PRETTY_NAME="Kumo Linux 0.0.2 (Sora)"
+ID=kumo
+VERSION_ID="0.0.2"
+VERSION="0.0.2 (Sora)"
+VERSION_CODENAME=sora
+HOME_URL="https://kumo.invalid/"
+SUPPORT_URL="https://kumo.invalid/"
+BUG_REPORT_URL="https://kumo.invalid/"
+

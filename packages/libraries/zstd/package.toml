@@ -1,0 +1,15 @@
+[package]
+name = "zstd"
+version = "1.5.7"
+release = 1
+description = "Zstandard compression library and tools"
+[source]
+url = "https://github.com/facebook/zstd/releases/download/v1.5.7/zstd-1.5.7.tar.gz"
+sha256 = "eb33e51f49a15e023950cd7825ca74a4a2b43db8354825ac24fc1b7ee09e6fa3"
+[build]
+system = "make"
+make_args = ["lib-release", "zstd-release", "HAVE_THREAD=1", "HAVE_ZLIB=0", "HAVE_LZMA=0", "HAVE_LZ4=0"]
+install_args = ["HAVE_ZLIB=0", "HAVE_LZMA=0", "HAVE_LZ4=0"]
+[dependencies]
+build = ["glibc-runtime"]
+runtime = ["glibc-runtime"]

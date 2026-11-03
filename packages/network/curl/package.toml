@@ -1,0 +1,15 @@
+[package]
+name = "curl"
+version = "8.23.0"
+release = 1
+description = "HTTP and HTTPS transfer utility and library"
+[source]
+url = "https://curl.se/download/curl-8.23.0.tar.xz"
+filename = "curl-8.23.0.tar.xz"
+sha256 = "8dadd7d2536a314f982ad05a651b713f426bf7d02cc2c76cffb9796f2218e6c5"
+[build]
+system = "autotools"
+configure_args = ["--disable-static", "--enable-shared", "--enable-ipv6", "--with-openssl", "--with-ca-bundle=/etc/ssl/certs/ca-certificates.crt", "--without-zlib", "--without-brotli", "--without-zstd", "--without-libpsl", "--without-libidn2", "--disable-dict", "--disable-ftp", "--disable-gopher", "--disable-imap", "--disable-ldap", "--disable-ldaps", "--disable-mqtt", "--disable-pop3", "--disable-rtsp", "--disable-smtp", "--disable-telnet", "--disable-tftp", "--disable-websockets", "--disable-ipfs", "--disable-httpsrr", "--disable-manual"]
+[dependencies]
+build = ["glibc-runtime", "openssl", "ca-certificates"]
+runtime = ["glibc-runtime", "openssl", "ca-certificates"]
