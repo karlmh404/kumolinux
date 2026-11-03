@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Assemble a collision-checked Kumo root filesystem from staged packages."""
 from __future__ import annotations
-import argparse, os, shutil, stat, subprocess, tomllib
+import argparse, io, os, shutil, stat, subprocess, tarfile, tomllib
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -16,10 +16,9 @@ def fix_root_ownership(path: Path) -> None:
         for entry in sorted(path.rglob("*"), key=lambda item: str(item)):
             if entry.is_symlink() or not entry.exists():
                 continue
+            mode = stat.S_IMODE(entry.stat().st_mode)
             os.chown(entry, 0, 0)
-        return
-    if shutil.which("sudo") and subprocess.run(["sudo", "-n", "true"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode == 0:
-        subprocess.run(["sudo", "-n", "chown", "-R", "0:0", str(path)], check=True)
+            os.chmod(entry, mode)
         return
     fail(f"rootfs assembly must run as root or passwordless sudo; current uid={os.getuid()} gid={os.getgid()}")
 
@@ -36,7 +35,22 @@ def copy_entry(source: Path, destination: Path, owner: str, owners: dict[str, st
     destination.parent.mkdir(parents=True, exist_ok=True)
     if source.is_symlink(): destination.symlink_to(os.readlink(source))
     elif source.is_dir(): destination.mkdir(exist_ok=True)
-    else: shutil.copy2(source, destination)
+    else:
+        try:
+            shutil.copy2(source, destination)
+        except PermissionError:
+            kpkg = next((OUT/"packages").glob(f"{owner}-*.kpkg"), None)
+            if kpkg:
+                zstd = ROOT/"work/host-tools/zstd/programs/zstd"
+                data = subprocess.check_output([str(zstd), "-q", "-d", "-c", str(kpkg)])
+                with tarfile.open(fileobj=io.BytesIO(data)) as tf:
+                    member_name = "root/" + str(destination.relative_to(OUT/"rootfs-base"))
+                    m = tf.getmember(member_name)
+                    with tf.extractfile(m) as fsrc, open(destination, "wb") as fdst:
+                        fdst.write(fsrc.read())
+                    os.chmod(destination, m.mode)
+            else:
+                raise
     owners[relative] = owner
 
 def merge_tree(source: Path, destination: Path, owner: str, owners: dict[str, str]):
@@ -58,6 +72,9 @@ def main():
         record = pkgdb/name; record.mkdir()
         shutil.copy2(package/"metadata.toml", record/"metadata.toml")
         shutil.copy2(package/"manifest.txt", record/"manifest.txt")
+    modules = OUT/"kernel-modules"
+    if modules.is_dir():
+        merge_tree(modules, target, "kumo-kernel-modules", owners)
     merge_tree(ROOT/"rootfs/base-overlay", target, "kumo-base-overlay", owners)
     resolv_conf = target/"etc/resolv.conf"
     if resolv_conf.exists() and not resolv_conf.is_symlink():

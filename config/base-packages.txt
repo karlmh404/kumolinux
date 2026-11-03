@@ -28,3 +28,4 @@ iputils
 openssl
 ca-certificates
 curl
+linux-firmware-base

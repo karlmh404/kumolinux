@@ -21,6 +21,9 @@ run: image kernel
 packages: toolchain
 	./tools/kumo-build base
 	./tools/kumo-build package kumo-hello-extra
+	./tools/kumo-build package pciutils
+	./tools/kumo-build package usbutils
+	./tools/kumo-build package kumo-hw
 repo: packages
 	./tools/kumo-repo build out/repository/x86_64
 base: repo

@@ -1,0 +1,14 @@
+[package]
+name = "kumo-hw"
+version = "1.0.0"
+release = 1
+description = "Lightweight Kumo hardware summary"
+[source]
+local = true
+url = "local"
+[build]
+system = "custom"
+script = "build.sh"
+[dependencies]
+build = ["glibc-runtime"]
+runtime = ["glibc-runtime", "pciutils", "usbutils", "util-linux", "procps-ng"]

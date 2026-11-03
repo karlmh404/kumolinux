@@ -1,0 +1,14 @@
+[package]
+name = "linux-firmware-base"
+version = "20261019"
+release = 1
+description = "Common redistributable Linux firmware baseline"
+[source]
+url = "https://www.kernel.org/pub/linux/kernel/firmware/linux-firmware-20261019.tar.xz"
+sha256 = "a10d1ab5baf2c74ba92e8c7cf313e691696c26bddfa6df00db795e48d70cd4ca"
+[build]
+system = "custom"
+script = "build.sh"
+[dependencies]
+build = []
+runtime = []

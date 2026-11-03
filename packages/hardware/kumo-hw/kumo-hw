@@ -1,0 +1,19 @@
+#!/bin/sh
+set -u
+section() { printf '\n%s:\n' "$1"; }
+run_or_empty() { if command -v "$1" >/dev/null 2>&1; then "$@" 2>/dev/null || true; else printf '  unavailable\n'; fi; }
+printf 'Kumo Hardware Summary\n'
+section CPU
+if command -v lscpu >/dev/null 2>&1; then lscpu 2>/dev/null | sed -n -e '/^Model name:/p' -e '/^Architecture:/p' -e '/^CPU(s):/p'; else sed -n 's/^model name[[:space:]]*: */  /p' /proc/cpuinfo 2>/dev/null | head -1; fi
+section Memory; run_or_empty free -h
+section PCI; run_or_empty lspci -nn
+section USB; run_or_empty lsusb
+section Storage; run_or_empty lsblk -o NAME,TYPE,SIZE,FSTYPE,MOUNTPOINTS
+section Network
+found=0
+for device in /sys/class/net/*; do [ -e "$device" ] || continue; name=$(basename "$device"); state=$(cat "$device/operstate" 2>/dev/null || printf unknown); address=$(cat "$device/address" 2>/dev/null || printf unknown); printf '  %s  %s  %s\n' "$name" "$state" "$address"; found=1; done
+[ "$found" -eq 1 ] || printf '  none\n'
+section Kernel; uname -srvm
+section Firmware
+count=$(find /usr/lib/firmware -type f 2>/dev/null | wc -l); printf '  %s files under /usr/lib/firmware\n' "$count"
+if command -v journalctl >/dev/null 2>&1; then warnings=$(journalctl -k --no-pager 2>/dev/null | grep -i 'firmware.*\(fail\|error\|missing\)' | tail -5 || true); [ -z "$warnings" ] || printf '%s\n' "$warnings"; fi

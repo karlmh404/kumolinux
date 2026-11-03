@@ -1,0 +1,14 @@
+[package]
+name = "pciutils"
+version = "3.15.0"
+release = 1
+description = "PCI bus inspection utilities and ID database"
+[source]
+url = "https://mj.ucw.cz/download/linux/pci/pciutils-3.15.0.tar.gz"
+sha256 = "a42e6e3f76fb6b1f6ac2e08cdd151f6bf78bc4f6312c591f4b6ec197582ede3a"
+[build]
+system = "custom"
+script = "build.sh"
+[dependencies]
+build = ["glibc-runtime", "zlib"]
+runtime = ["glibc-runtime", "zlib"]

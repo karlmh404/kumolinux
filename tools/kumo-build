@@ -117,6 +117,20 @@ def build_sysroot(catalog: dict, name: str, destination: Path) -> None:
     shutil.copytree(TOOLCHAIN / TARGET / "sysroot", destination, symlinks=True)
     for directory, dirs, files in os.walk(destination):
         os.chmod(directory, os.stat(directory).st_mode | stat.S_IWUSR)
+    def copy_filter(path, names):
+        ignored = set()
+        for item in names:
+            if item.endswith(".la") or item in ("credstore", "credstore.encrypted"):
+                ignored.add(item)
+                continue
+            full = os.path.join(path, item)
+            try:
+                if os.path.isdir(full) and not os.access(full, os.R_OK | os.X_OK):
+                    ignored.add(item)
+            except OSError:
+                ignored.add(item)
+        return ignored
+
     closure = order([name], catalog)[:-1]
     for dep in closure:
         if dep == "glibc-runtime":
@@ -125,7 +139,7 @@ def build_sysroot(catalog: dict, name: str, destination: Path) -> None:
         if not root.exists():
             fail(f"dependency {dep} is not staged")
         shutil.copytree(root, destination, dirs_exist_ok=True, symlinks=True,
-                        ignore=shutil.ignore_patterns("*.la"))
+                        ignore=copy_filter)
 
 def environment(sysroot: Path) -> dict[str, str]:
     bindir = TOOLCHAIN / "bin"
@@ -211,8 +225,13 @@ def build_one(name: str, catalog: dict) -> None:
             stamp.write_text(fingerprint + "\n")
         print(f"[kumo-build] {name}: reusing legacy staged root")
         return
+    kpkg_path = OUT / "packages" / f"{name}-{package['version']}-{package['release']}-x86_64.kpkg"
+    if kpkg_path.exists() and root.is_dir() and stamp.exists():
+        print(f"[kumo-build] {name}: reusing existing canonical package")
+        return
     archive = None if data.get("source", {}).get("local") else fetch(data)
     output.mkdir(parents=True, exist_ok=True)
+    (OUT / "packages" / f"{name}-{package['version']}-{package['release']}-x86_64.kpkg").unlink(missing_ok=True)
     for path in (root, build):
         if path.exists(): remove_tree(path)
         path.mkdir(parents=True)
@@ -257,7 +276,7 @@ def build_one(name: str, catalog: dict) -> None:
     license_dir = root / "usr/share/licenses" / name
     license_dir.mkdir(parents=True, exist_ok=True)
     copied = False
-    for pattern in ("COPYING*", "LICENSE*", "LICENCE*", "License*"):
+    for pattern in ("COPYING*", "LICENSE*", "LICENCE*", "License*", "*.spdx"):
         for item in source.glob(pattern):
             if item.is_file():
                 shutil.copy2(item, license_dir/item.name)
@@ -267,6 +286,11 @@ def build_one(name: str, catalog: dict) -> None:
     stamp.write_text(fingerprint + "\n")
 
 def package_output(name: str, data: dict, output: Path, root: Path, recipe_hash: str, recipe_path: Path) -> None:
+    p, s = data["package"], data["source"]
+    archive_dir = OUT / "packages"; archive_dir.mkdir(parents=True, exist_ok=True)
+    final = archive_dir / ("{0}-{1}-{2}-x86_64.kpkg".format(name, p["version"], p["release"]))
+    if final.exists() and (root.parent/".complete").exists() and (root.parent/"manifest.txt").exists():
+        return
     entries = []
     installed_size = 0
     for path in sorted(root.rglob("*"), key=lambda item: item.relative_to(root).as_posix()):

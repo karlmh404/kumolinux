@@ -1,0 +1,14 @@
+[package]
+name = "libusb"
+version = "1.0.30"
+release = 1
+description = "Userspace USB access library"
+[source]
+url = "https://github.com/libusb/libusb/releases/download/v1.0.30/libusb-1.0.30.tar.bz2"
+sha256 = "fea36f34f9156400209595e300840767ab1a385ede1dc7ee893015aea9c6dbaf"
+[build]
+system = "autotools"
+configure_args = ["--disable-udev", "--disable-static"]
+[dependencies]
+build = ["glibc-runtime"]
+runtime = ["glibc-runtime"]
