@@ -1,0 +1,17 @@
+[package]
+name = "xcursor-themes"
+version = "1.0"
+release = 1
+description = "Minimal default X cursor theme"
+
+[source]
+local = true
+url = "local"
+
+[build]
+system = "custom"
+script = "build.sh"
+
+[dependencies]
+build = ["glibc-runtime"]
+runtime = ["glibc-runtime"]

@@ -68,4 +68,5 @@ runtime = [
     "systemd",
     "seatd",
     "weston",
+    "xcursor-themes",
 ]

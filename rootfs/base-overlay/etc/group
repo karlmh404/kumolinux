@@ -9,4 +9,5 @@ systemd-network:x:192:
 systemd-timesync:x:193:
 input:x:999:
 kvm:x:998:
+video:x:996:
 render:x:997:
