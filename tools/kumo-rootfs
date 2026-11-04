@@ -105,8 +105,12 @@ def main():
                 if not link_path.exists() and not link_path.is_symlink():
                     link_path.symlink_to(os.path.relpath(source, link_path.parent))
     links = {
-        "etc/systemd/system/default.target": "/usr/lib/systemd/system/multi-user.target",
+        "etc/systemd/system/default.target": "/usr/lib/systemd/system/graphical.target",
+        "etc/systemd/system/getty.target.wants/getty@tty1.service": "/usr/lib/systemd/system/getty@.service",
         "etc/systemd/system/getty.target.wants/serial-getty@ttyS0.service": "/usr/lib/systemd/system/serial-getty@.service",
+        "etc/systemd/system/multi-user.target.wants/getty.target": "/usr/lib/systemd/system/getty.target",
+        "etc/systemd/system/multi-user.target.wants/seatd.service": "/usr/lib/systemd/system/seatd.service",
+        "etc/systemd/system/multi-user.target.wants/systemd-logind.service": "/usr/lib/systemd/system/systemd-logind.service",
         "usr/bin/sh": "dash",
         "usr/bin/init": "../lib/systemd/systemd",
     }
@@ -126,9 +130,15 @@ def main():
         shutil.copy2(src, destination)
         destination.chmod(0o755)
     subprocess.run(["systemctl", f"--root={target}", "preset",
-                    "systemd-networkd.service", "systemd-resolved.service"], check=True)
-    subprocess.run(["systemctl", f"--root={target}", "disable",
-                    "systemd-networkd-wait-online.service"], check=True)
+                    "systemd-networkd.service", "systemd-resolved.service", "systemd-logind.service", "seatd.service", "getty@tty1.service", "serial-getty@ttyS0.service"], check=True)
+    # Ensure seatd, logind, and getty@tty1 are enabled
+    for svc, wants in (("seatd.service", "multi-user.target.wants"),
+                       ("systemd-logind.service", "multi-user.target.wants"),
+                       ("getty@tty1.service", "getty.target.wants")):
+        link = target / "etc" / "systemd" / "system" / wants / svc
+        if not link.exists() and not link.is_symlink():
+            link.parent.mkdir(parents=True, exist_ok=True)
+            link.symlink_to(f"../../usr/lib/systemd/system/{svc}")
     fix_root_ownership(target)
     print(f"[kumo-rootfs] assembled {len(names)} packages into {target}")
 
