@@ -1,0 +1,17 @@
+[package]
+name = "pango"
+version = "1.52.0"
+release = 1
+description = "Pango text layout library backed by Cairo"
+
+[source]
+local = true
+url = "local"
+
+[build]
+system = "custom"
+script = "build.sh"
+
+[dependencies]
+build = ["glibc-runtime", "cairo", "glib"]
+runtime = ["glibc-runtime", "cairo", "glib"]

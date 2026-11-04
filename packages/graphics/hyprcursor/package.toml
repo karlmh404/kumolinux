@@ -1,0 +1,31 @@
+[package]
+name = "hyprcursor"
+version = "0.1.10"
+release = 1
+description = "Hyprland cursor theme format library and toolkit"
+
+[source]
+url = "https://github.com/hyprwm/hyprcursor/archive/refs/tags/v0.1.10.tar.gz"
+filename = "hyprcursor-0.1.10.tar.gz"
+sha256 = "67e845404164fee4c5694209b3d5f93a31b6963dbb0bfd6ed2cd96c99b316a08"
+
+[build]
+system = "cmake"
+patches = ["0001-optional-librsvg.patch"]
+configure_args = ["-DBUILD_TESTING=OFF"]
+
+[dependencies]
+build = [
+    "glibc-runtime",
+    "hyprlang",
+    "libzip",
+    "cairo",
+    "tomlplusplus",
+]
+runtime = [
+    "glibc-runtime",
+    "hyprlang",
+    "libzip",
+    "cairo",
+    "tomlplusplus",
+]

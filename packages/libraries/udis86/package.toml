@@ -1,0 +1,18 @@
+[package]
+name = "udis86"
+version = "1.7.2"
+release = 1
+description = "x86 and x86-64 disassembler library"
+
+[source]
+url = "https://github.com/canihavesomecoffee/udis86/archive/5336633af70f3917760a6d441ff02d93477b0c86.tar.gz"
+filename = "udis86-1.7.2.tar.gz"
+sha256 = "2f459fafa19535ef1be417bf7614e4f92475e5787d7ba76df20287cc29d1b5a9"
+
+[build]
+system = "custom"
+script = "build.sh"
+
+[dependencies]
+build = ["glibc-runtime"]
+runtime = ["glibc-runtime"]

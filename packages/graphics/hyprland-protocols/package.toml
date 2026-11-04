@@ -1,0 +1,18 @@
+[package]
+name = "hyprland-protocols"
+version = "0.4.0"
+release = 1
+description = "Wayland protocol extensions for Hyprland"
+
+[source]
+url = "https://github.com/hyprwm/hyprland-protocols/archive/refs/tags/v0.4.0.tar.gz"
+filename = "hyprland-protocols-0.4.0.tar.gz"
+sha256 = "ab3525d8bad576db911d4ba1b586f303dd988660b3b8980022c1795fd574b165"
+
+[build]
+system = "meson"
+configure_args = []
+
+[dependencies]
+build = ["glibc-runtime"]
+runtime = ["glibc-runtime"]

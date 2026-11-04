@@ -1,0 +1,17 @@
+[package]
+name = "libdisplay-info"
+version = "0.2.0"
+release = 1
+description = "EDID and DisplayID library"
+
+[source]
+url = "https://gitlab.freedesktop.org/emersion/libdisplay-info/uploads/e392a65bf1e7e631def7bfa513f33e49/libdisplay-info-0.2.0.tar.xz"
+sha256 = "5a2f002a16f42dd3540c8846f80a90b8f4bdcd067a94b9d2087bc2feae974176"
+
+[build]
+system = "meson"
+configure_args = []
+
+[dependencies]
+build = ["glibc-runtime", "hwdata"]
+runtime = ["glibc-runtime", "hwdata"]

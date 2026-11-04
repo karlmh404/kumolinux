@@ -1,0 +1,44 @@
+[package]
+name = "mesa"
+version = "24.1.7"
+release = 1
+description = "Mesa 3D graphics library (EGL, GLESv2, GBM, swrast, virgl)"
+
+[source]
+url = "https://archive.mesa3d.org/mesa-24.1.7.tar.xz"
+sha256 = "ecd2e7b1c73998f4103542f39c6b8c968d251637ccc8caa42641aecb86cd2566"
+
+[build]
+system = "meson"
+patches = ["0001-c11-threads.patch"]
+configure_args = [
+  "-Dplatforms=wayland",
+  "-Dgallium-drivers=swrast,virgl",
+  "-Dvulkan-drivers=[]",
+  "-Dglx=disabled",
+  "-Degl=enabled",
+  "-Dgbm=enabled",
+  "-Dgles1=disabled",
+  "-Dgles2=enabled",
+  "-Dopengl=true",
+  "-Dllvm=disabled",
+  "-Dshared-glapi=enabled",
+  "-Dtools=[]"
+]
+
+[dependencies]
+build = [
+  "glibc-runtime",
+  "libdrm",
+  "wayland",
+  "wayland-protocols",
+  "expat",
+  "zlib"
+]
+runtime = [
+  "glibc-runtime",
+  "libdrm",
+  "wayland",
+  "expat",
+  "zlib"
+]

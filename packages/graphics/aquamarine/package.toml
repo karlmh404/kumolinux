@@ -1,0 +1,45 @@
+[package]
+name = "aquamarine"
+version = "0.7.2"
+release = 1
+description = "Lightweight Linux rendering backend library"
+
+[source]
+url = "https://github.com/hyprwm/aquamarine/archive/refs/tags/v0.7.2.tar.gz"
+filename = "aquamarine-0.7.2.tar.gz"
+sha256 = "822ce38345bc4c1b95966c79ee72ff18d753aa923c83e9aa64e9d82eebf55a38"
+
+[build]
+system = "cmake"
+patches = ["0001-gles2-link.patch"]
+configure_args = ["-DBUILD_TESTING=OFF"]
+
+[dependencies]
+build = [
+    "glibc-runtime",
+    "seatd",
+    "libinput",
+    "wayland",
+    "wayland-protocols",
+    "hyprutils",
+    "pixman",
+    "libdrm",
+    "mesa",
+    "systemd",
+    "libdisplay-info",
+    "hwdata",
+    "hyprwayland-scanner",
+]
+runtime = [
+    "glibc-runtime",
+    "seatd",
+    "libinput",
+    "wayland",
+    "hyprutils",
+    "pixman",
+    "libdrm",
+    "mesa",
+    "systemd",
+    "libdisplay-info",
+    "hwdata",
+]

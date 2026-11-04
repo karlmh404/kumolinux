@@ -1,7 +1,7 @@
 SHELL := /bin/bash
 .DEFAULT_GOAL := all
 
-.PHONY: setup fetch toolchain kernel busybox rootfs image run packages repo base disk run-disk run-graphics all clean distclean
+.PHONY: setup fetch toolchain kernel busybox rootfs image run packages repo base disk run-disk run-graphics run-hyprland all clean distclean
 setup:
 	./scripts/setup-host.sh
 fetch:
@@ -37,6 +37,9 @@ run-disk:
 run-graphics:
 	@if [[ ! -f out/images/kumo-root.img ]]; then $(MAKE) disk; fi
 	./scripts/run-graphics-qemu.sh
+run-hyprland:
+	@if [[ ! -f out/images/kumo-root.img ]]; then $(MAKE) disk; fi
+	./scripts/run-hyprland-qemu.sh
 all: image kernel
 clean:
 	./scripts/clean.sh

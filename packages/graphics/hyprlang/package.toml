@@ -1,0 +1,18 @@
+[package]
+name = "hyprlang"
+version = "0.4.2"
+release = 1
+description = "Hyprland configuration language library"
+
+[source]
+url = "https://github.com/hyprwm/hyprlang/archive/refs/tags/v0.4.2.tar.gz"
+filename = "hyprlang-0.4.2.tar.gz"
+sha256 = "a365ee660f4456e7d4d21f0153563c00146f2c9fb9f1e7b5a6ab12fce924f6f8"
+
+[build]
+system = "cmake"
+configure_args = ["-DBUILD_TESTING=OFF"]
+
+[dependencies]
+build = ["glibc-runtime"]
+runtime = ["glibc-runtime"]

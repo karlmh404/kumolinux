@@ -1,0 +1,19 @@
+[package]
+name = "hyprutils"
+version = "0.5.2"
+release = 1
+description = "Hyprland utility library"
+
+[source]
+url = "https://github.com/hyprwm/hyprutils/archive/refs/tags/v0.5.2.tar.gz"
+filename = "hyprutils-0.5.2.tar.gz"
+sha256 = "b30b93be9597489bd5a29c8cd91d60ea0fcaea08fd03cca1368e101c4ae19d3d"
+
+[build]
+system = "cmake"
+patches = ["0001-include-cstdint.patch"]
+configure_args = ["-DBUILD_TESTING=OFF"]
+
+[dependencies]
+build = ["glibc-runtime", "pixman"]
+runtime = ["glibc-runtime", "pixman"]

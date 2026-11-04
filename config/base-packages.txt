@@ -19,6 +19,7 @@ gzip
 sed
 tar
 util-linux
+ncurses
 procps-ng
 kmod
 shadow

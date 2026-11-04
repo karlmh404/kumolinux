@@ -1,0 +1,66 @@
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -29,9 +29,14 @@
+   hyprlang>=0.4.2
+   libzip
+   cairo
+-  librsvg-2.0
+   tomlplusplus)
+ 
++pkg_check_modules(rsvg IMPORTED_TARGET librsvg-2.0)
++if(rsvg_FOUND)
++    add_compile_definitions(HAS_LIBRSVG=1)
++    set(RSVG_TARGET PkgConfig::rsvg)
++endif()
++
+ if(CMAKE_BUILD_TYPE MATCHES Debug OR CMAKE_BUILD_TYPE MATCHES DEBUG)
+   message(STATUS "Configuring hyprcursor in Debug")
+   add_compile_definitions(HYPRLAND_DEBUG)
+@@ -61,7 +66,7 @@
+              PUBLIC_HEADER include/hyprcursor/hyprcursor.hpp
+              include/hyprcursor/hyprcursor.h include/hyprcursor/shared.h)
+ 
+-target_link_libraries(hyprcursor PkgConfig::deps)
++target_link_libraries(hyprcursor PkgConfig::deps ${RSVG_TARGET})
+ 
+ if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+   # for std::expected. probably evil. Arch's clang is very outdated tho...
+@@ -84,7 +89,7 @@
+   hyprcursor-util
+   PUBLIC "./include"
+   PRIVATE "./libhyprcursor" "./hyprcursor-util/src")
+-target_link_libraries(hyprcursor-util PkgConfig::deps hyprcursor)
++target_link_libraries(hyprcursor-util PkgConfig::deps ${RSVG_TARGET} hyprcursor)
+ 
+ # tests
+ add_custom_target(tests)
+--- a/libhyprcursor/hyprcursor.cpp
++++ b/libhyprcursor/hyprcursor.cpp
+@@ -8,7 +8,9 @@
+ #include <cstring>
+ #include <algorithm>
+ #include <cmath>
++#if defined(HAS_LIBRSVG)
+ #include <librsvg/rsvg.h>
++#endif
+ 
+ #include "manifest.hpp"
+ #include "meta.hpp"
+@@ -542,6 +544,7 @@
+                 cairo_paint(PCAIRO);
+                 cairo_restore(PCAIRO);
+ 
++#if defined(HAS_LIBRSVG)
+                 GError*     error  = nullptr;
+                 RsvgHandle* handle = rsvg_handle_new_from_data((unsigned char*)f->data, f->dataLen, &error);
+ 
+@@ -556,6 +559,9 @@
+                     Debug::log(HC_LOG_ERR, logFn, "Failed rendering svg: {}", error->message);
+                     return false;
+                 }
++#else
++                Debug::log(HC_LOG_WARN, logFn, "SVG cursors disabled at compile time");
++#endif
+ 
+                 // done
+                 cairo_surface_flush(newImage->cairoSurface);

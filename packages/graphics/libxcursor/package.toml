@@ -1,0 +1,17 @@
+[package]
+name = "libxcursor"
+version = "1.2.2"
+release = 1
+description = "X cursor compatibility library for Wayland compositors"
+
+[source]
+local = true
+url = "local"
+
+[build]
+system = "custom"
+script = "build.sh"
+
+[dependencies]
+build = ["glibc-runtime"]
+runtime = ["glibc-runtime"]

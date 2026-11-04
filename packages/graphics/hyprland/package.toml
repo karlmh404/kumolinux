@@ -1,0 +1,71 @@
+[package]
+name = "hyprland"
+version = "0.45.2"
+release = 1
+description = "A dynamic tiling Wayland compositor"
+
+[source]
+url = "https://github.com/hyprwm/Hyprland/releases/download/v0.45.2/source-v0.45.2.tar.gz"
+filename = "hyprland-0.45.2.tar.gz"
+sha256 = "ad54556ed694e00dc7b433a3cc916c8f5b9633f0b290d2d6f48f2bcdf2886d28"
+
+[build]
+system = "custom"
+script = "build.sh"
+
+[dependencies]
+build = [
+    "glibc-runtime",
+    "wayland",
+    "wayland-protocols",
+    "hyprland-protocols",
+    "hyprwayland-scanner",
+    "hyprutils",
+    "hyprlang",
+    "hyprcursor",
+    "aquamarine",
+    "mesa",
+    "libdrm",
+    "libinput",
+    "libxkbcommon",
+    "cairo",
+    "pixman",
+    "libdisplay-info",
+    "hwdata",
+    "tomlplusplus",
+    "pugixml",
+    "libzip",
+    "udis86",
+    "libxcursor",
+    "glib",
+    "pango",
+    "util-linux",
+    "systemd",
+]
+runtime = [
+    "glibc-runtime",
+    "wayland",
+    "hyprutils",
+    "hyprlang",
+    "hyprcursor",
+    "aquamarine",
+    "mesa",
+    "libdrm",
+    "libinput",
+    "libxkbcommon",
+    "cairo",
+    "pixman",
+    "libdisplay-info",
+    "hwdata",
+    "tomlplusplus",
+    "pugixml",
+    "libzip",
+    "udis86",
+    "libxcursor",
+    "glib",
+    "pango",
+    "util-linux",
+    "systemd",
+    "seatd",
+    "weston",
+]

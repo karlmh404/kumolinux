@@ -1,0 +1,17 @@
+[package]
+name = "glib"
+version = "2.80.0"
+release = 1
+description = "GLib and GIO compatibility library for Wayland"
+
+[source]
+local = true
+url = "local"
+
+[build]
+system = "custom"
+script = "build.sh"
+
+[dependencies]
+build = ["glibc-runtime"]
+runtime = ["glibc-runtime"]

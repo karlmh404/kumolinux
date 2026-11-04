@@ -1,0 +1,11 @@
+--- a/cmake/install-rules.cmake
++++ b/cmake/install-rules.cmake
+@@ -52,3 +52,8 @@
+ if(PROJECT_IS_TOP_LEVEL)
+   include(CPack)
+ endif()
++
++file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/tomlplusplus.pc"
++    "prefix=${CMAKE_INSTALL_PREFIX}\nincludedir=\${prefix}/${CMAKE_INSTALL_INCLUDEDIR}\n\nName: tomlplusplus\nDescription: Header-only TOML parser for C++\nVersion: ${PROJECT_VERSION}\nCflags: -I\${includedir}\n")
++install(FILES "${CMAKE_CURRENT_BINARY_DIR}/tomlplusplus.pc"
++    DESTINATION "${CMAKE_INSTALL_LIBDIR}/pkgconfig")

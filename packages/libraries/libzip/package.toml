@@ -1,0 +1,26 @@
+[package]
+name = "libzip"
+version = "1.11.2"
+release = 1
+description = "C library for reading, creating, and modifying zip archives"
+
+[source]
+url = "https://github.com/nih-at/libzip/releases/download/v1.11.2/libzip-1.11.2.tar.xz"
+sha256 = "5d471308cef4c4752bbcf973d9cd37ba4cb53739116c30349d4764ba1410dfc1"
+
+[build]
+system = "cmake"
+configure_args = [
+    "-DBUILD_TOOLS=OFF",
+    "-DBUILD_REGRESS=OFF",
+    "-DBUILD_EXAMPLES=OFF",
+    "-DBUILD_DOC=OFF",
+    "-DENABLE_BZIP2=OFF",
+    "-DENABLE_LZMA=ON",
+    "-DENABLE_ZSTD=ON",
+    "-DENABLE_OPENSSL=ON",
+]
+
+[dependencies]
+build = ["glibc-runtime", "zlib", "zstd", "xz", "openssl"]
+runtime = ["glibc-runtime", "zlib", "zstd", "xz", "openssl"]

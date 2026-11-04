@@ -145,12 +145,22 @@ def build_sysroot(catalog: dict, name: str, destination: Path) -> None:
         pc_dir = destination / "usr/share/pkgconfig"
         pc_dir.mkdir(parents=True, exist_ok=True)
         shutil.copy2(host_wayland_pc, pc_dir / "wayland-scanner.pc")
+    host_hyprwayland_pc = ROOT / "work/host-tools/pkgconfig/hyprwayland-scanner.pc"
+    if host_hyprwayland_pc.exists():
+        pc_dir = destination / "usr/share/pkgconfig"
+        pc_dir.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(host_hyprwayland_pc, pc_dir / "hyprwayland-scanner.pc")
 
 def environment(sysroot: Path) -> dict[str, str]:
     bindir = TOOLCHAIN / "bin"
+    host_bindir = ROOT / "work" / "host-tools" / "bin"
+    python_tools = ROOT / "work" / "host-tools" / "python"
+    existing_pythonpath = os.environ.get("PYTHONPATH", "")
+    pythonpath = f"{python_tools}:{existing_pythonpath}" if existing_pythonpath else str(python_tools)
     env = os.environ.copy()
     env.update({
-        "PATH": f"{bindir}:{env['PATH']}", "SOURCE_DATE_EPOCH": SOURCE_DATE_EPOCH,
+        "PATH": f"{host_bindir}:{bindir}:{env['PATH']}", "SOURCE_DATE_EPOCH": SOURCE_DATE_EPOCH,
+        "PYTHONPATH": pythonpath,
         "LC_ALL": "C", "TZ": "UTC", "TARGET": TARGET, "SYSROOT": str(sysroot),
         "TOOLCHAIN_DIR": str(TOOLCHAIN),
         "FORCE_UNSAFE_CONFIGURE": "1",
@@ -183,6 +193,8 @@ pkg_config_libdir = ['{sysroot}/usr/lib/pkgconfig', '{sysroot}/usr/share/pkgconf
 [built-in options]
 c_args = ['--sysroot={sysroot}', '-Wno-error=discarded-qualifiers']
 c_link_args = ['--sysroot={sysroot}']
+cpp_args = ['--sysroot={sysroot}']
+cpp_link_args = ['--sysroot={sysroot}']
 [host_machine]
 system = 'linux'
 cpu_family = 'x86_64'
@@ -196,6 +208,7 @@ set(CMAKE_SYSROOT {sysroot})
 set(CMAKE_C_COMPILER {TARGET}-gcc)
 set(CMAKE_CXX_COMPILER {TARGET}-g++)
 set(CMAKE_FIND_ROOT_PATH {sysroot})
+set(CMAKE_PREFIX_PATH {sysroot}/usr {sysroot})
 set(CMAKE_FIND_ROOT_PATH_MODE_PROGRAM NEVER)
 set(CMAKE_FIND_ROOT_PATH_MODE_LIBRARY ONLY)
 set(CMAKE_FIND_ROOT_PATH_MODE_INCLUDE ONLY)
@@ -275,6 +288,7 @@ def build_one(name: str, catalog: dict) -> None:
         run(["make", "-C", str(source), f"DESTDIR={root}", "PREFIX=/usr", "install", *spec.get("install_args", [])], env=env, log=log)
     elif system == "custom":
         script = recipe_path.parent / spec["script"]
+        script.chmod(script.stat().st_mode | 0o755)
         custom = env | {"KUMO_SOURCE": str(source), "KUMO_BUILD": str(build), "KUMO_DESTDIR": str(root), "KUMO_RECIPE": str(recipe_path)}
         run([str(script)], cwd=ROOT, env=custom, log=log)
     else:
@@ -335,8 +349,8 @@ def package_output(name: str, data: dict, output: Path, root: Path, recipe_hash:
     archive_dir = OUT / "packages"; archive_dir.mkdir(parents=True, exist_ok=True)
     tar_path = output / f"{name}.tar"
     env = os.environ | {"SOURCE_DATE_EPOCH": SOURCE_DATE_EPOCH}
-    tar_cmd = ["tar", "--format=ustar", "--sort=name", f"--mtime=@{SOURCE_DATE_EPOCH}", "--owner=0", "--group=0", "--numeric-owner", "-cf", str(tar_path), "metadata.toml", "manifest.txt", "-C", str(root.parent), "root"]
-    tar_without_sort = ["tar", "--format=ustar", f"--mtime=@{SOURCE_DATE_EPOCH}", "--owner=0", "--group=0", "--numeric-owner", "-cf", str(tar_path), "metadata.toml", "manifest.txt", "-C", str(root.parent), "root"]
+    tar_cmd = ["tar", "--format=ustar", "--sort=name", "--hard-dereference", f"--mtime=@{SOURCE_DATE_EPOCH}", "--owner=0", "--group=0", "--numeric-owner", "-cf", str(tar_path), "metadata.toml", "manifest.txt", "-C", str(root.parent), "root"]
+    tar_without_sort = ["tar", "--format=ustar", "--hard-dereference", f"--mtime=@{SOURCE_DATE_EPOCH}", "--owner=0", "--group=0", "--numeric-owner", "-cf", str(tar_path), "metadata.toml", "manifest.txt", "-C", str(root.parent), "root"]
     result = subprocess.run(tar_cmd, cwd=output, env=env, capture_output=True, text=True)
     if result.returncode != 0 and "--sort=name" in result.stderr.lower():
         result = subprocess.run(tar_without_sort, cwd=output, env=env, capture_output=True, text=True)

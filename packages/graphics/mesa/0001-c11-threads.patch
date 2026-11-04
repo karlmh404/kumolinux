@@ -1,0 +1,65 @@
+--- a/meson.build
++++ b/meson.build
+@@ -1451,11 +1451,8 @@
+ 
+ with_c11_threads = false
+ if cc.has_function('thrd_create', prefix: '#include <threads.h>')
+-  if with_platform_android
+-    # Current only Android's c11 <threads.h> are verified
+-    pre_args += '-DHAVE_THRD_CREATE'
+-    with_c11_threads = true
+-  endif
++  pre_args += '-DHAVE_THRD_CREATE'
++  with_c11_threads = true
+ endif
+ 
+ if cc.has_header_symbol('errno.h', 'program_invocation_name',
+--- a/src/egl/drivers/dri2/egl_dri2.c
++++ b/src/egl/drivers/dri2/egl_dri2.c
+@@ -3311,7 +3311,6 @@ dri2_create_sync(_EGLDisplay *disp, EGLenum type, const EGLAttrib *attrib_list)
+    struct dri2_egl_context *dri2_ctx = dri2_egl_context(ctx);
+    struct dri2_egl_sync *dri2_sync;
+    EGLint ret;
+-   pthread_condattr_t attr;
+ 
+    dri2_sync = calloc(1, sizeof(struct dri2_egl_sync));
+    if (!dri2_sync) {
+@@ -3351,25 +3350,7 @@ dri2_create_sync(_EGLDisplay *disp, EGLenum type, const EGLAttrib *attrib_list)
+       break;
+ 
+    case EGL_SYNC_REUSABLE_KHR:
+-      /* initialize attr */
+-      ret = pthread_condattr_init(&attr);
+-
+-      if (ret) {
+-         _eglError(EGL_BAD_ACCESS, "eglCreateSyncKHR");
+-         goto fail;
+-      }
+-
+-#if !defined(__APPLE__) && !defined(__MACOSX)
+-      /* change clock attribute to CLOCK_MONOTONIC */
+-      ret = pthread_condattr_setclock(&attr, CLOCK_MONOTONIC);
+-
+-      if (ret) {
+-         _eglError(EGL_BAD_ACCESS, "eglCreateSyncKHR");
+-         goto fail;
+-      }
+-#endif
+-
+-      ret = pthread_cond_init(&dri2_sync->cond, &attr);
++      ret = cnd_init(&dri2_sync->cond);
+ 
+       if (ret) {
+          _eglError(EGL_BAD_ACCESS, "eglCreateSyncKHR");
+@@ -3510,9 +3491,8 @@ dri2_client_wait_sync(_EGLDisplay *disp, _EGLSync *sync, EGLint flags,
+             struct timespec current;
+             struct timespec expire;
+ 
+-            /* We override the clock to monotonic when creating the condition
+-             * variable. */
+-            clock_gettime(CLOCK_MONOTONIC, &current);
++            /* C11 cnd_timedwait uses an absolute TIME_UTC deadline. */
++            timespec_get(&current, TIME_UTC);
+ 
+             /* calculating when to expire */
+             expire.tv_nsec = timeout % 1000000000L;

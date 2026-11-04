@@ -1,0 +1,18 @@
+[package]
+name = "hyprwayland-scanner"
+version = "0.4.0"
+release = 1
+description = "C++ Wayland protocol scanner used by Hyprland"
+
+[source]
+url = "https://github.com/hyprwm/hyprwayland-scanner/archive/refs/tags/v0.4.0.tar.gz"
+filename = "hyprwayland-scanner-0.4.0.tar.gz"
+sha256 = "4091122777ade12b8edc8de6f2df4917ced73b81cd40d946a995de73880ec71f"
+
+[build]
+system = "custom"
+script = "build.sh"
+
+[dependencies]
+build = ["glibc-runtime", "pugixml"]
+runtime = ["glibc-runtime", "pugixml"]

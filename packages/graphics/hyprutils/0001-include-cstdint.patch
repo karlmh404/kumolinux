@@ -1,0 +1,20 @@
+--- a/include/hyprutils/memory/SharedPtr.hpp
++++ b/include/hyprutils/memory/SharedPtr.hpp
+@@ -1,5 +1,7 @@
+ #pragma once
+ 
++#include <cstdint>
++
+ #include "ImplBase.hpp"
+ 
+ namespace Hyprutils {
+--- a/include/hyprutils/memory/UniquePtr.hpp
++++ b/include/hyprutils/memory/UniquePtr.hpp
+@@ -1,5 +1,7 @@
+ #pragma once
+ 
++#include <cstdint>
++
+ #include "ImplBase.hpp"
+ 
+ namespace Hyprutils {

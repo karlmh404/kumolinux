@@ -1,0 +1,18 @@
+[package]
+name = "pugixml"
+version = "1.15"
+release = 1
+description = "Lightweight C++ XML processing library"
+
+[source]
+url = "https://github.com/zeux/pugixml/archive/refs/tags/v1.15.tar.gz"
+filename = "pugixml-1.15.tar.gz"
+sha256 = "b39647064d9e28297a34278bfb897092bf33b7c487906ddfc094c9e8868bddcb"
+
+[build]
+system = "cmake"
+configure_args = ["-DBUILD_SHARED_LIBS=ON", "-DPUGIXML_BUILD_TESTS=OFF"]
+
+[dependencies]
+build = ["glibc-runtime"]
+runtime = ["glibc-runtime"]
