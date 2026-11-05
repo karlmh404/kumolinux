@@ -1,0 +1,17 @@
+[package]
+name = "dejavu-fonts"
+version = "2.37"
+release = 1
+description = "DejaVu font family"
+
+[source]
+local = true
+url = "local"
+
+[build]
+system = "custom"
+script = "build.sh"
+
+[dependencies]
+build = ["glibc-runtime"]
+runtime = ["glibc-runtime"]

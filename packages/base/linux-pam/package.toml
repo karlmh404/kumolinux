@@ -1,0 +1,14 @@
+[package]
+name = "linux-pam"
+version = "1.6.1"
+release = 1
+description = "Pluggable Authentication Modules (PAM) library and modules"
+[source]
+url = "https://github.com/linux-pam/linux-pam/releases/download/v1.6.1/Linux-PAM-1.6.1.tar.xz"
+sha256 = "f8923c740159052d719dbfc2a2f81942d68dd34fcaf61c706a02c9b80feeef8e"
+[build]
+system = "autotools"
+configure_args = ["--disable-nls", "--disable-doc", "--disable-examples", "--disable-prelude", "--disable-static", "--libdir=/usr/lib"]
+[dependencies]
+build = ["glibc-runtime", "libxcrypt"]
+runtime = ["glibc-runtime", "libxcrypt"]

@@ -1,14 +1,14 @@
 [package]
 name = "shadow"
 version = "4.18.0"
-release = 1
+release = 2
 description = "Account and login utilities"
 [source]
 url = "https://github.com/shadow-maint/shadow/releases/download/4.18.0/shadow-4.18.0.tar.xz"
 sha256 = "add4604d3bc410344433122a819ee4154b79dd8316a56298c60417e637c07608"
 [build]
 system = "autotools"
-configure_args = ["--disable-nls", "--without-audit", "--without-selinux", "--without-acl", "--without-attr", "--without-tcb", "--without-libpam", "--without-btrfs", "--with-group-name-max-length=32", "--enable-subordinate-ids=no"]
+configure_args = ["--disable-nls", "--without-audit", "--without-selinux", "--without-acl", "--without-attr", "--without-tcb", "--with-libpam", "--without-btrfs", "--with-group-name-max-length=32", "--enable-subordinate-ids=no"]
 [dependencies]
-build = ["glibc-runtime", "libxcrypt", "libbsd"]
-runtime = ["glibc-runtime", "libxcrypt", "libbsd"]
+build = ["glibc-runtime", "libxcrypt", "libbsd", "linux-pam"]
+runtime = ["glibc-runtime", "libxcrypt", "libbsd", "linux-pam"]
