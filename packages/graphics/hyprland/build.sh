@@ -62,3 +62,22 @@ if [[ -f "$KUMO_DESTDIR/usr/share/hypr/hyprland.conf" ]]; then
   mkdir -p "$KUMO_DESTDIR/etc/hypr"
   cp "$KUMO_DESTDIR/usr/share/hypr/hyprland.conf" "$KUMO_DESTDIR/etc/hypr/hyprland.conf"
 fi
+
+# 7. Comment out references to programs not in the Kumo repository
+if [[ -f "$KUMO_DESTDIR/usr/share/hypr/hyprland.conf" ]]; then
+  sed -i 's|^$fileManager = dolphin|# $fileManager = dolphin  # dolphin not in repo|g' "$KUMO_DESTDIR/usr/share/hypr/hyprland.conf"
+  sed -i 's|^$menu = wofi --show drun|# $menu = wofi --show drun  # wofi not in repo|g' "$KUMO_DESTDIR/usr/share/hypr/hyprland.conf"
+  sed -i 's|^bind = $mainMod, E, exec, $fileManager|# bind = $mainMod, E, exec, $fileManager  # dolphin not installed|g' "$KUMO_DESTDIR/usr/share/hypr/hyprland.conf"
+  sed -i 's|^bind = $mainMod, R, exec, $menu|# bind = $mainMod, R, exec, $menu  # wofi not installed|g' "$KUMO_DESTDIR/usr/share/hypr/hyprland.conf"
+  sed -i 's|^bindel = ,XF86AudioRaiseVolume, exec, wpctl|# bindel = ,XF86AudioRaiseVolume, exec, wpctl  # wpctl not installed|g' "$KUMO_DESTDIR/usr/share/hypr/hyprland.conf"
+  sed -i 's|^bindel = ,XF86AudioLowerVolume, exec, wpctl|# bindel = ,XF86AudioLowerVolume, exec, wpctl  # wpctl not installed|g' "$KUMO_DESTDIR/usr/share/hypr/hyprland.conf"
+  sed -i 's|^bindel = ,XF86AudioMute, exec, wpctl|# bindel = ,XF86AudioMute, exec, wpctl  # wpctl not installed|g' "$KUMO_DESTDIR/usr/share/hypr/hyprland.conf"
+  sed -i 's|^bindel = ,XF86AudioMicMute, exec, wpctl|# bindel = ,XF86AudioMicMute, exec, wpctl  # wpctl not installed|g' "$KUMO_DESTDIR/usr/share/hypr/hyprland.conf"
+  sed -i 's|^bindel = ,XF86MonBrightnessUp, exec, brightnessctl|# bindel = ,XF86MonBrightnessUp, exec, brightnessctl  # brightnessctl not installed|g' "$KUMO_DESTDIR/usr/share/hypr/hyprland.conf"
+  sed -i 's|^bindel = ,XF86MonBrightnessDown, exec, brightnessctl|# bindel = ,XF86MonBrightnessDown, exec, brightnessctl  # brightnessctl not installed|g' "$KUMO_DESTDIR/usr/share/hypr/hyprland.conf"
+  sed -i 's|^bindl = , XF86AudioNext, exec, playerctl|# bindl = , XF86AudioNext, exec, playerctl  # playerctl not installed|g' "$KUMO_DESTDIR/usr/share/hypr/hyprland.conf"
+  sed -i 's|^bindl = , XF86AudioPause, exec, playerctl|# bindl = , XF86AudioPause, exec, playerctl  # playerctl not installed|g' "$KUMO_DESTDIR/usr/share/hypr/hyprland.conf"
+  sed -i 's|^bindl = , XF86AudioPlay, exec, playerctl|# bindl = , XF86AudioPlay, exec, playerctl  # playerctl not installed|g' "$KUMO_DESTDIR/usr/share/hypr/hyprland.conf"
+  sed -i 's|^bindl = , XF86AudioPrev, exec, playerctl|# bindl = , XF86AudioPrev, exec, playerctl  # playerctl not installed|g' "$KUMO_DESTDIR/usr/share/hypr/hyprland.conf"
+fi
+
