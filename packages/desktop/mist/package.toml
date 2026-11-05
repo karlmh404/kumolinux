@@ -1,0 +1,17 @@
+[package]
+name = "mist"
+version = "0.1.0"
+release = 1
+description = "Mist Desktop Environment - Kumo Linux graphical shell"
+
+[source]
+local = true
+url = "local"
+
+[build]
+system = "custom"
+script = "build.sh"
+
+[dependencies]
+build = ["glibc-runtime", "hyprland"]
+runtime = ["glibc-runtime", "hyprland", "weston"]

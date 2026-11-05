@@ -1,0 +1,18 @@
+[package]
+name = "hypridle"
+version = "0.1.8"
+release = 1
+description = "An idle management daemon for Hyprland"
+
+[source]
+url = "https://github.com/hyprwm/hypridle/archive/refs/tags/v0.1.8.tar.gz"
+filename = "hypridle-0.1.8.tar.gz"
+sha256 = "08703613cc33cc796c2179bcaa6076e8618113f67b938daaf7535f90c7d39595"
+
+[build]
+system = "custom"
+script = "build.sh"
+
+[dependencies]
+build = ["glibc-runtime", "systemd", "sdbus-cpp", "hyprland-protocols", "hyprwayland-scanner", "hyprlang", "hyprutils", "wayland", "wayland-protocols"]
+runtime = ["glibc-runtime", "systemd", "sdbus-cpp", "hyprlang", "hyprutils", "wayland"]
