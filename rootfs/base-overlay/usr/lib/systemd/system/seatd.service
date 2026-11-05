@@ -2,9 +2,10 @@
 Description=Seat management daemon
 Documentation=man:seatd(8)
 After=systemd-udevd.service
+ConditionPathIsExecutable=/usr/bin/seatd
 
 [Service]
-ExecStart=/usr/bin/seatd
+ExecStart=/usr/bin/seatd -g video
 User=root
 Group=root
 SupplementaryGroups=input render
