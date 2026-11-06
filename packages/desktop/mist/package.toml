@@ -1,8 +1,8 @@
 [package]
 name = "mist"
 version = "0.1.0"
-release = 2
-description = "Mist Desktop Environment - Kumo Linux graphical shell (Qt6/Quickshell)"
+release = 3
+description = "Mist Desktop Environment — Kumo Linux graphical shell (Hyprland + Qt Quick shell)"
 
 [source]
 local = true

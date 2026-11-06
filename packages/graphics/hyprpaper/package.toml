@@ -1,18 +1,17 @@
 [package]
-name = 'hyprpaper'
-version = '0.5.0'
+name = "hyprpaper"
+version = "0.5.0"
 release = 1
-description = 'Hyprpaper - Wayland wallpaper utility'
+description = "Hyprpaper — Wayland wallpaper manager for Hyprland"
 
 [source]
-url = 'file:///home/kewl/kumo/cache/packages/hyprpaper-0.5.0.tar.xz'
-filename = 'hyprpaper-0.5.0.tar.xz'
-sha256 = '8459e025d8b52abdb13c9ee8fd8ba46bea9e9bcef7085e5400c9492d2e8059a5'
+url = "https://github.com/hyprwm/hyprpaper/releases/download/v0.5.0/hyprpaper-0.5.0.tar.xz"
+sha256 = "8459e025d8b52abdb13c9ee8fd8ba46bea9e9bcef7085e5400c9492d2e8059a5"
 
 [build]
 system = "custom"
 script = "build.sh"
 
 [dependencies]
-build = ['glibc-runtime', 'hyprlang', 'hyprutils', 'wayland']
-runtime = ['glibc-runtime', 'hyprlang', 'hyprutils', 'wayland']
+build = ["glibc-runtime", "hyprlang", "hyprutils", "wayland", "wayland-protocols"]
+runtime = ["glibc-runtime", "hyprlang", "hyprutils", "wayland"]

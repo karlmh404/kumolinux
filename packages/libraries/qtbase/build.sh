@@ -115,8 +115,8 @@ cmake -S "$KUMO_SOURCE" -B "$KUMO_BUILD" \
     -DQT_FEATURE_linuxfb=OFF \
     -DQT_FEATURE_kms=OFF \
     -DQT_FEATURE_wayland=ON \
-    -DQT_FEATURE_xcb=ON \
-    -DQT_FEATURE_dbus=ON \
+    -DQT_FEATURE_xcb=OFF \
+    -DQT_FEATURE_dbus=OFF \
     -DQT_FEATURE_sql=OFF \
     -DQT_FEATURE_network=OFF \
     -DQT_FEATURE_script=OFF \
@@ -154,7 +154,7 @@ cmake -S "$KUMO_SOURCE" -B "$KUMO_BUILD" \
     -DQT_FEATURE_tiff=OFF \
     -DQT_FEATURE_webp=OFF
 
-cmake --build "$KUMO_BUILD" -j"$(getconf _NPROCESSORS_ONLN)"
+cmake --build "$KUMO_BUILD" -j4
 
 DESTDIR="$KUMO_DESTDIR" cmake --install "$KUMO_BUILD"
 

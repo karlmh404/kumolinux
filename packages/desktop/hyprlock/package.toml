@@ -1,18 +1,18 @@
 [package]
-name = 'hyprlock'
-version = '0.4.0'
+name = "hyprlock"
+version = "0.4.0"
 release = 1
-description = 'Hyprlock - Wayland screen locker'
+description = "Hyprlock - Wayland screen locker for Hyprland (Mist lock screen)"
 
 [source]
-url = 'file:///home/kewl/kumo/cache/packages/hyprlock-0.4.0.tar.xz'
-filename = 'hyprlock-0.4.0.tar.xz'
-sha256 = '01eab866774d68eba21e8b2b90efa69c1e2ab6a2fb7c3529d4bd50fba83a4344'
+url = "file:///home/kewl/kumo/cache/packages/hyprlock-0.4.0.tar.xz"
+filename = "hyprlock-0.4.0.tar.xz"
+sha256 = "01eab866774d68eba21e8b2b90efa69c1e2ab6a2fb7c3529d4bd50fba83a4344"
 
 [build]
-system = 'custom'
-script = 'build.sh'
+system = "custom"
+script = "build.sh"
 
 [dependencies]
-build = ['glibc-runtime', 'hyprlang', 'hyprutils', 'wayland', 'wayland-protocols', 'cairo', 'pango', 'mesa', 'libdrm']
-runtime = ['glibc-runtime', 'hyprlang', 'hyprutils', 'wayland', 'cairo', 'pango', 'mesa', 'libdrm']
+build = ["glibc-runtime", "hyprlang", "hyprutils", "wayland", "wayland-protocols", "cairo", "pango", "mesa", "libdrm", "hyprwayland-scanner"]
+runtime = ["glibc-runtime", "hyprlang", "hyprutils", "wayland", "cairo", "pango"]

@@ -27,6 +27,7 @@ Window {
     MistBridge { id: bridge }
 
     property string favorites: ""
+    property string searchText: ""
     property bool commandMode: searchText.startsWith(">")
     property var allApps: (bridge.applications && bridge.applications !== "")
         ? JSON.parse(bridge.applications) : []
@@ -66,7 +67,7 @@ Window {
                 placeholderTextColor: root.textDim
                 font.pointSize: 14
                 background: Rectangle { color: "transparent" }
-                onTextChanged: root.filter()
+                onTextChanged: { root.filter(); searchText = text }
                 Keys.onPressed: {
                     if (event.key === Qt.Key_Escape) { root.visible = false; event.accepted = true }
                     else if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter) { root.launchCurrent(); event.accepted = true }
@@ -147,8 +148,8 @@ Window {
     }
 
     function toggleCommandMode() {
-        if (commandMode) searchField.text = searchText.slice(1);
-        else searchField.text = ">" + searchText;
+        if (commandMode) searchField.text = searchField.text.slice(1);
+        else searchField.text = ">" + searchField.text;
         searchField.focus = true;
     }
     function fuzzyScore(text, pattern) {
@@ -161,7 +162,7 @@ Window {
         return 0;
     }
     function filter() {
-        var pattern = commandMode ? searchText.slice(1) : searchText;
+        var pattern = commandMode ? searchField.text.slice(1) : searchField.text;
         var res = [];
         for (var i = 0; i < root.allApps.length; i++) {
             var app = root.allApps[i];
@@ -196,7 +197,7 @@ Window {
     }
     function launchCurrent() {
         if (root.results.length > 0) root.launch(root.results[root.currentIndex]);
-        else if (commandMode && searchText.length > 1) bridge.invoke(searchText.slice(1));
+        else if (commandMode && searchField.text.length > 1) bridge.invoke(searchField.text.slice(1));
         root.visible = false;
     }
 }
