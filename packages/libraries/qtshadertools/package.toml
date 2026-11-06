@@ -1,0 +1,18 @@
+[package]
+name = 'qtshadertools'
+version = '6.5.2'
+release = 1
+description = 'Qt 6 shader tools'
+
+[source]
+url = 'file:///home/kewl/kumo/cache/packages/qtshadertools-everywhere-src-6.5.2.tar.xz'
+filename = 'qtshadertools-everywhere-src-6.5.2.tar.xz'
+sha256 = '8818a704a0d7a473f762489cbfffdcb16ff868a85a2b2e39a934924678d6bd19'
+
+[build]
+system = "custom"
+script = "build.sh"
+
+[dependencies]
+build = ['glibc-runtime', 'qtbase']
+runtime = ['glibc-runtime', 'qtbase']

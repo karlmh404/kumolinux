@@ -1,0 +1,30 @@
+[theme]
+name = "Mist Light"
+variant = "light"
+description = "Light theme for Kumo Mist desktop"
+
+[colors]
+bg_dark = "#f8fafc"
+bg_surface = "rgba(248, 250, 252, 0.90)"
+bg_elevated = "#f1f5f9"
+accent = "#38bdf8"
+accent_dim = "rgba(56, 189, 248, 0.40)"
+accent_hover = "#0ea5e9"
+text = "#0f172a"
+text_dim = "rgba(15, 23, 42, 0.60)"
+text_inverse = "#f8fafc"
+active_bg = "rgba(56, 189, 248, 0.12)"
+border_col = "rgba(56, 189, 248, 0.25)"
+active_border = "#38bdf8"
+inactive_border = "#cbd5e1"
+shadow_color = "rgba(15, 23, 42, 0.10)"
+
+[geometry]
+corner = 12
+border_size = 2
+gaps_in = 8
+gaps_out = 16
+
+[opacity]
+active = 0.98
+inactive = 0.95

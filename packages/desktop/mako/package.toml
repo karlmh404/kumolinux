@@ -1,0 +1,18 @@
+[package]
+name = "mako"
+version = "2.0"
+release = 1
+description = "Mako - lightweight Wayland notification daemon"
+
+[source]
+url = "https://github.com/emersion/mako/archive/refs/tags/v2.0.tar.gz"
+filename = "mako-2.0.tar.gz"
+sha256 = "placeholder-sha256"
+
+[build]
+system = "custom"
+script = "build.sh"
+
+[dependencies]
+build = ["glibc-runtime", "wayland", "wayland-protocols", "glib", "pango", "cairo"]
+runtime = ["glibc-runtime", "wayland", "glib", "pango", "cairo"]

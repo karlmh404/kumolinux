@@ -1,0 +1,4 @@
+module org.kumo.mist
+singleton MistBridge 1.0 MistBridge.qml
+plugin mistbridge
+

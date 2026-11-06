@@ -1,0 +1,30 @@
+[theme]
+name = "Mist Dark"
+variant = "dark"
+description = "Dark theme for Kumo Mist desktop (default)"
+
+[colors]
+bg_dark = "#1e293b"
+bg_surface = "rgba(30, 41, 59, 0.80)"
+bg_elevated = "#0f172a"
+accent = "#38bdf8"
+accent_dim = "rgba(56, 189, 248, 0.50)"
+accent_hover = "#7dd3fc"
+text = "#f8fafc"
+text_dim = "rgba(248, 250, 252, 0.60)"
+text_inverse = "#1e293b"
+active_bg = "rgba(56, 189, 248, 0.18)"
+border_col = "rgba(56, 189, 248, 0.35)"
+active_border = "#38bdf8"
+inactive_border = "#64748b"
+shadow_color = "rgba(15, 23, 42, 0.40)"
+
+[geometry]
+corner = 12
+border_size = 2
+gaps_in = 8
+gaps_out = 16
+
+[opacity]
+active = 0.95
+inactive = 0.90

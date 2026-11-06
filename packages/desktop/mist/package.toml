@@ -1,8 +1,8 @@
 [package]
 name = "mist"
 version = "0.1.0"
-release = 1
-description = "Mist Desktop Environment - Kumo Linux graphical shell"
+release = 2
+description = "Mist Desktop Environment - Kumo Linux graphical shell (Qt6/Quickshell)"
 
 [source]
 local = true
@@ -13,5 +13,5 @@ system = "custom"
 script = "build.sh"
 
 [dependencies]
-build = ["glibc-runtime", "hyprland"]
-runtime = ["glibc-runtime", "hyprland", "weston"]
+build = ["glibc-runtime", "hyprland", "qtbase", "qtdeclarative", "qtwayland", "quickshell", "hyprlock", "hyprpaper"]
+runtime = ["glibc-runtime", "hyprland", "qtbase", "qtdeclarative", "qtwayland", "quickshell", "hyprlock", "hyprpaper"]

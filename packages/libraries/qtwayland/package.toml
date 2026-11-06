@@ -1,0 +1,18 @@
+[package]
+name = 'qtwayland'
+version = '6.5.2'
+release = 1
+description = 'Qt 6 Wayland platform plugin'
+
+[source]
+url = 'file:///home/kewl/kumo/cache/packages/qtwayland-everywhere-src-6.5.2.tar.xz'
+filename = 'qtwayland-everywhere-src-6.5.2.tar.xz'
+sha256 = '7488a2dcadc05f46954a5f7d8e048f43177cf266fea803c242d28494c6af52db'
+
+[build]
+system = "custom"
+script = "build.sh"
+
+[dependencies]
+build = ['glibc-runtime', 'qtbase', 'qtdeclarative', 'wayland', 'wayland-protocols']
+runtime = ['glibc-runtime', 'qtbase', 'qtdeclarative', 'wayland']

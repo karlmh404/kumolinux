@@ -1,0 +1,18 @@
+[package]
+name = "fontconfig"
+version = "2.15.0"
+release = 1
+description = "Font configuration and customization library"
+
+[source]
+url = "https://www.freedesktop.org/software/fontconfig/release/fontconfig-2.15.0.tar.xz"
+filename = "fontconfig-2.15.0.tar.xz"
+sha256 = "63a0658d0e06e0fa886106452b58ef04f21f58202ea02a94c39de0d3335d7c0e"
+
+[build]
+system = "autotools"
+configure_args = ["--disable-nls", "--disable-static", "--disable-docs", "--disable-libxml2", "--disable-iconv"]
+
+[dependencies]
+build = ["glibc-runtime", "freetype2", "expat"]
+runtime = ["glibc-runtime", "freetype2", "expat"]

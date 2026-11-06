@@ -1,0 +1,18 @@
+[package]
+name = "harfbuzz"
+version = "8.3.0"
+release = 1
+description = "OpenType text shaping engine"
+
+[source]
+url = "https://github.com/harfbuzz/harfbuzz/releases/download/8.3.0/harfbuzz-8.3.0.tar.xz"
+filename = "harfbuzz-8.3.0.tar.xz"
+sha256 = "109501eaeb8bde3eadb25fab4164e993fbace29c3d775bcaa1c1e58e2f15f847"
+
+[build]
+system = "custom"
+script = "build.sh"
+
+[dependencies]
+build = ["glibc-runtime", "freetype2", "glib"]
+runtime = ["glibc-runtime", "freetype2", "glib"]

@@ -1,0 +1,18 @@
+[package]
+name = "quickshell"
+version = "1.0.0"
+release = 1
+description = "Quickshell - Qt Quick desktop shell framework"
+
+[source]
+url = "https://github.com/quickshell/quickshell/archive/refs/tags/v1.0.0.tar.gz"
+filename = "quickshell-1.0.0.tar.gz"
+sha256 = "placeholder-sha256"
+
+[build]
+system = "custom"
+script = "build.sh"
+
+[dependencies]
+build = ["glibc-runtime", "qtbase", "qtdeclarative", "qtwayland", "wayland", "wayland-protocols"]
+runtime = ["glibc-runtime", "qtbase", "qtdeclarative", "qtwayland", "wayland"]

@@ -1,0 +1,18 @@
+[package]
+name = "qtbase"
+version = "6.5.2"
+release = 1
+description = "Qt 6 base libraries (Core, Gui, Widgets, etc.)"
+
+[source]
+url = "file:///home/kewl/kumo/cache/packages/qtbase-everywhere-src-6.5.2.tar.xz"
+filename = "qtbase-everywhere-src-6.5.2.tar.xz"
+sha256 = "2956b46d43a3985311bc31f75126b80ba8af5d031a9302345b761b140a6eedb7"
+
+[build]
+system = "custom"
+script = "build.sh"
+
+[dependencies]
+build = ["glibc-runtime", "wayland", "wayland-protocols", "libinput", "libxkbcommon", "libdrm", "mesa", "libpng", "zlib", "zstd", "fontconfig", "freetype2", "libmd"]
+runtime = ["glibc-runtime", "wayland", "wayland-protocols", "libinput", "libxkbcommon", "libdrm", "mesa", "libpng", "zlib", "fontconfig", "freetype2", "libmd"]

@@ -1,0 +1,18 @@
+[package]
+name = 'qtdeclarative'
+version = '6.5.2'
+release = 1
+description = 'Qt 6 declarative module (QML, Qt Quick)'
+
+[source]
+url = 'file:///home/kewl/kumo/cache/packages/qtdeclarative-everywhere-src-6.5.2.tar.xz'
+filename = 'qtdeclarative-everywhere-src-6.5.2.tar.xz'
+sha256 = 'd45dc8a1892540a39f8b2eeedce05b73ae4879748f93d8a09b7f8bff61404ce9'
+
+[build]
+system = "custom"
+script = "build.sh"
+
+[dependencies]
+build = ['glibc-runtime', 'qtbase', 'qtshadertools']
+runtime = ['glibc-runtime', 'qtbase', 'qtshadertools']
